@@ -8,7 +8,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import {
-  airdropLeaf, buildMerkleTree, commitProof, LAMPORTS_PER_SOL, nowIso, openDb, recordFeeReceipt, repoRoot, setMeta,
+  airdropLeaf, buildMerkleTree, commitProof, LAMPORTS_PER_SOL, nowIso, openDb, recordCopycowReward, recordCopytradeFee, recordLaunchReward, repoRoot, setMeta,
 } from "@copycow/shared";
 import { Keypair } from "@solana/web3.js";
 
@@ -67,20 +67,28 @@ trends.forEach((term, i) => {
   const p = commitProof(db, "token_launch", { mode: "paper", trend_term: term, demo: true });
   const id = Number(db.prepare(`INSERT INTO launched_tokens (trend_id, trend_term, name, ticker, description, mode, status, launch_buy_sol, proof_id, launched_at)
     VALUES (?, ?, ?, ?, 'DEMO token', 'paper', 'paper_launched', 0.5, ?, ?)`).run(tr, term, term[0].toUpperCase() + term.slice(1), term.toUpperCase().slice(0, 8), p.id, at).lastInsertRowid);
-  for (let d = 0; d < 7; d++) recordFeeReceipt(db, { sourceType: "creator_fee", sourceRef: `$${term.toUpperCase().slice(0, 8)}`, launchedTokenId: id, amountLamports: Math.round((0.2 + rand() * 1.5) * LAMPORTS_PER_SOL), simulated: true, note: "DEMO" });
+  for (let d = 0; d < 7; d++) recordLaunchReward(db, { sourceRef: `$${term.toUpperCase().slice(0, 8)}`, launchedTokenId: id, amountLamports: Math.round((0.05 + rand() * 0.3) * LAMPORTS_PER_SOL), simulated: true, note: "DEMO" });
+  // COWBOT's launch buy, sold at 2x or after 24h
+  const win = rand() < 0.5;
+  const pnlPct = win ? 100 : -(20 + rand() * 50);
+  const exitTs = new Date(new Date(at).getTime() + (win ? 6 : 24) * 3_600_000).toISOString();
+  db.prepare(`INSERT INTO trades (mint, symbol, kind, launched_token_id, status, mode, size_sol, size_usd, entry_price, entry_ts, entry_reason, exit_price, exit_ts, exit_reason, pnl_pct, pnl_sol)
+    VALUES (?, ?, 'launch', ?, 'closed', 'paper', 0.5, 75, 1, ?, 'DEMO launch buy', ?, ?, ?, ?, ?)`)
+    .run(`DEMO${term}`, term.toUpperCase().slice(0, 8), id, at, 1 + pnlPct / 100, exitTs, win ? "launch_take_profit" : "launch_time_exit", pnlPct, 0.5 * pnlPct / 100);
 });
-for (let i = 0; i < 12; i++) recordFeeReceipt(db, { sourceType: "copytrade_fee", sourceRef: `trade:${i}`, amountLamports: Math.round(rand() * 0.2 * LAMPORTS_PER_SOL), simulated: true, note: "DEMO" });
+for (let d = 0; d < 20; d++) recordCopycowReward(db, { sourceRef: "$COPYCOW", amountLamports: Math.round((0.2 + rand() * 1.2) * LAMPORTS_PER_SOL), simulated: true, note: "DEMO" });
+for (let i = 0; i < 12; i++) recordCopytradeFee(db, { sourceRef: `trade:${i}`, amountLamports: 1 + Math.round(rand() * 0.02 * LAMPORTS_PER_SOL), simulated: true, note: "DEMO" });
 
 // Past airdrops
 for (let e = 1; e <= 4; e++) {
   const wallets = Array.from({ length: 40 + e * 15 }, () => Keypair.generate().publicKey.toBase58());
-  const amounts = wallets.map(() => BigInt(Math.round((0.001 + rand() * 0.01) * LAMPORTS_PER_SOL)));
+  const amounts = wallets.map(() => BigInt(Math.round((0.001 + rand() * 0.004) * LAMPORTS_PER_SOL)));
   const tree = buildMerkleTree(wallets.map((w, i) => airdropLeaf(BigInt(e), { index: i, wallet: w, amountLamports: amounts[i] })));
   const total = amounts.reduce((a, b) => a + b, 0n);
   const end = new Date(Date.now() - (29 - e * 7) * day).toISOString();
   const p = commitProof(db, "airdrop_epoch", { mode: "paper", epoch_index: e, merkle_root: tree.root.toString("hex"), demo: true });
-  db.prepare(`INSERT INTO airdrop_epochs (epoch_index, merkle_epoch, period_end, mode, status, pool_lamports, total_lamports, wallets_paid, merkle_root, snapshot_slot, tx_signatures, proof_id, notes, created_at)
-    VALUES (?, ?, ?, 'paper', 'paper', ?, ?, ?, ?, ?, '[]', ?, 'DEMO', ?)`).run(e, e, end, Number(total), Number(total), wallets.length, tree.root.toString("hex"), 300_000_000 + e * 1_500_000, p.id, end);
+  db.prepare(`INSERT INTO airdrop_epochs (epoch_index, kind, merkle_epoch, period_end, mode, status, pool_lamports, trading_pnl_lamports, total_lamports, wallets_paid, merkle_root, snapshot_slot, tx_signatures, proof_id, notes, created_at)
+    VALUES (?, 'cowbot_profit', ?, ?, 'paper', 'paper', ?, ?, ?, ?, ?, ?, '[]', ?, 'DEMO', ?)`).run(e, e, end, Number(total), Number(total), Number(total), wallets.length, tree.root.toString("hex"), 300_000_000 + e * 1_500_000, p.id, end);
 }
 const msgs = ["Moo-ving into JUP — 15m 1.80% · vol pace 1.90x", "Fresh grass: took profit on BONK at +3.12% (+0.0312 SOL)", "Rut: stopped out of WIF at -1.52%. No revenge trades — cooling off.", "Grazing complete: 2/2 positions green."];
 msgs.forEach((m, i) => db.prepare("INSERT INTO agent_log (ts, level, message) VALUES (?, ?, ?)").run(new Date(Date.now() - (4 - i) * 60_000).toISOString(), "info", `[DEMO] ${m}`));

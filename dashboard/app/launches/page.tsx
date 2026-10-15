@@ -18,22 +18,31 @@ export default function LaunchesPage() {
       </PageHeader>
 
       <div className="mb-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
-        <Stat label="Creator fees earned" value={t ? t.feesSol.toFixed(4) : "—"} sub="SOL, all launched tokens" />
-        <Stat label="→ Holders (10%)" value={t ? t.holdersSol.toFixed(4) : "—"} sub="hard-coded · never more" valueClass="text-win" />
-        <Stat label="→ Treasury (90%)" value={t ? t.treasurySol.toFixed(4) : "—"} sub="compounds + funds launches" />
-        <Stat label="Copytrade fees" value={t ? t.copytradeFeesSol.toFixed(4) : "—"} sub="SOL · same 10/90 split" />
+        <Stat label="Launched-coin rewards" value={t ? t.coinRewardsSol.toFixed(4) : "—"} sub={t ? `100% to each coin's holders · ${t.coinRewardsAirdroppedSol.toFixed(4)} airdropped` : "SOL"} valueClass="text-win" />
+        <Stat label="Launch-sale P&L" value={t ? `${t.launchPnlSol >= 0 ? "+" : ""}${t.launchPnlSol.toFixed(4)}` : "—"} sub="SOL · goes to $COPYCOW holders" valueClass={t && t.launchPnlSol < 0 ? "text-loss" : "text-win"} />
+        <Stat label="$COPYCOW rewards" value={t ? t.copycowRewardsSol.toFixed(4) : "—"} sub={t ? `COWBOT 10% ${t.agentSol.toFixed(4)} · team 90% ${t.teamSol.toFixed(4)}` : "SOL"} />
+        <Stat label="Team 90% sent" value={t ? t.teamSentSol.toFixed(4) : "—"} sub="SOL · on-chain to team wallet" />
       </div>
 
-      {/* 10/90 visual */}
-      <Window title="FEE_SPLIT.EXE" icon="🔀" className="mb-4">
-        <div className="p-4">
-          <div className="flex h-8 bevel-in text-[11px] font-bold">
-            <div className="flex w-[10%] items-center justify-center bg-win text-black">10%</div>
-            <div className="flex flex-1 items-center justify-center bg-muted text-muted-foreground">90% treasury</div>
+      <Window title="WHO_GETS_WHAT.TXT" icon="🔀" className="mb-4">
+        <div className="grid gap-4 p-4 md:grid-cols-2">
+          <div>
+            <p className="mb-1 text-[11px] uppercase tracking-widest text-muted-foreground">A coin COWBOT launches</p>
+            <div className="flex h-8 bevel-in text-[11px] font-bold">
+              <div className="flex flex-1 items-center justify-center bg-win text-black">100% creator rewards → that coin&apos;s holders (daily)</div>
+            </div>
+            <p className="mt-2 text-[11px] text-muted-foreground">COWBOT sells its own launch buy at 2× or after 24h; that profit goes to $COPYCOW holders.</p>
           </div>
-          <p className="mt-2 text-[11px] text-muted-foreground">
-            FOUNDER RULE: holders get exactly 10% of creator fees — hard-coded in the code and in the on-chain contract (HOLDER_FEE_BPS = 1000). Airdropped weekly, no claim.
-          </p>
+          <div>
+            <p className="mb-1 text-[11px] uppercase tracking-widest text-muted-foreground">$COPYCOW creator rewards</p>
+            <div className="flex h-8 bevel-in text-[11px] font-bold">
+              <div className="flex w-[18%] min-w-[64px] items-center justify-center bg-win text-black">10% COWBOT</div>
+              <div className="flex flex-1 items-center justify-center bg-muted text-muted-foreground">90% team wallet (marketing)</div>
+            </div>
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              FOUNDER RULE: COWBOT keeps max 10% (AGENT_SHARE_BPS = 1000, hard-coded on-chain). The team&apos;s 90% is sent straight away; COWBOT can never touch it.
+            </p>
+          </div>
         </div>
       </Window>
 
@@ -45,9 +54,9 @@ export default function LaunchesPage() {
               <TableHead>Token</TableHead>
               <TableHead>Trend ridden</TableHead>
               <TableHead className="text-right">Dev buy</TableHead>
-              <TableHead className="text-right">Creator fees</TableHead>
-              <TableHead className="text-right">10% holders</TableHead>
-              <TableHead className="text-right">90% treasury</TableHead>
+              <TableHead className="text-right">Rewards → holders</TableHead>
+              <TableHead className="text-right">Airdropped</TableHead>
+              <TableHead className="text-right">Launch buy P&amp;L</TableHead>
               <TableHead>Status</TableHead>
             </TableRow>
           </TableHeader>
@@ -78,8 +87,10 @@ export default function LaunchesPage() {
                   {lamportsToSol(tk.fees_lamports).toFixed(5)}
                   {tk.simulated_fees ? <span className="ml-1 text-[10px] text-amber">sim</span> : null}
                 </TableCell>
-                <TableCell className="text-right text-win">{lamportsToSol(tk.holder_lamports).toFixed(5)}</TableCell>
-                <TableCell className="text-right">{lamportsToSol(tk.treasury_lamports).toFixed(5)}</TableCell>
+                <TableCell className="text-right text-win">{lamportsToSol(tk.airdropped_lamports).toFixed(5)}</TableCell>
+                <TableCell className={`text-right ${tk.launch_pnl_sol === null ? "text-muted-foreground" : tk.launch_pnl_sol >= 0 ? "text-win" : "text-loss"}`}>
+                  {tk.launch_status === "open" ? "holding" : tk.launch_pnl_sol === null ? "—" : `${tk.launch_pnl_sol >= 0 ? "+" : ""}${tk.launch_pnl_sol.toFixed(4)}`}
+                </TableCell>
                 <TableCell>
                   {tk.tx_signature ? (
                     <a href={solscanTx(tk.tx_signature)} target="_blank" rel="noreferrer">

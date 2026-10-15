@@ -1,6 +1,7 @@
 "use client";
 import { PageHeader } from "@/components/page-header";
 import { Window } from "@/components/window";
+import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { usePoll } from "@/lib/use-poll";
 import { ago, pct, pnlClass, signedSol, usd } from "@/lib/format";
@@ -19,7 +20,7 @@ export default function LivePage() {
           {error && <span className="text-loss"> · {error}</span>}
         </p>
       </PageHeader>
-      <Window title={`POSITIONS.XLS — ${rows.length}/3 open`} icon="📈" right={<span className={cn("text-xs font-bold num", totalU >= 0 ? "text-win" : "text-loss")}>{signedSol(totalU)} SOL</span>}>
+      <Window title={`POSITIONS.XLS — ${rows.filter((r) => r.kind === "momentum").length}/3 open`} icon="📈" right={<span className={cn("text-xs font-bold num", totalU >= 0 ? "text-win" : "text-loss")}>{signedSol(totalU)} SOL</span>}>
         <Table>
           <TableHeader>
             <TableRow>
@@ -43,7 +44,9 @@ export default function LivePage() {
             )}
             {rows.map((t) => (
               <TableRow key={t.id} className={cn((t.unrealized_pct ?? 0) >= 0 ? "bg-win/[0.03]" : "bg-loss/[0.04]")}>
-                <TableCell className="font-bold">{t.symbol}</TableCell>
+                <TableCell className="font-bold">
+                  {t.symbol} {t.kind === "launch" && <Badge variant="amber">launch buy</Badge>}
+                </TableCell>
                 <TableCell className="text-muted-foreground">{ago(t.entry_ts)}</TableCell>
                 <TableCell className="text-right">{usd(t.entry_price)}</TableCell>
                 <TableCell className="text-right">{usd(t.last_price)}</TableCell>
@@ -56,7 +59,7 @@ export default function LivePage() {
           </TableBody>
         </Table>
         <p className="border-t px-3 py-2 text-[11px] text-muted-foreground">
-          Exit rules: take-profit +3% · stop-loss −1.5% · max hold 4h. Mark price refreshes every 5-minute agent cycle.
+          Trades: take-profit +3% · stop-loss −1.5% · max hold 4h. Launch buys: sold at 2× or after 24h. Profits from both → weekly $COPYCOW airdrop.
         </p>
       </Window>
     </>

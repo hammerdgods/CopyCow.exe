@@ -14,7 +14,8 @@ import { cn } from "@/lib/utils";
 
 export default function Home() {
   const { data: s, error } = usePoll<Summary>("/api/summary", 10_000);
-  const { data: open } = usePoll<Trade[]>("/api/positions", 10_000);
+  const { data: positions } = usePoll<Trade[]>("/api/positions", 10_000);
+  const open = positions?.filter((t) => t.kind === "momentum");
 
   const wr = s?.winRate ?? null;
   const roi = s ? (s.totalPnlSol / s.startingCapitalSol) * 100 : null;
@@ -65,8 +66,8 @@ export default function Home() {
         <Window title="HOLDERS.DLL" icon="🪙">
           <div className="space-y-3 p-3 text-xs">
             <div className="flex items-baseline justify-between gap-2">
-              <span className="text-muted-foreground">Dividend pool (next airdrop)</span>
-              <span className="text-lg font-bold text-win num">{s ? s.dividendPoolSol.toFixed(4) : "—"} SOL</span>
+              <span className="text-muted-foreground">Next $COPYCOW airdrop (all profit)</span>
+              <span className="text-lg font-bold text-win num">{s ? s.airdropPoolSol.toFixed(4) : "—"} SOL</span>
             </div>
             <div className="flex items-baseline justify-between gap-2">
               <span className="text-muted-foreground">Next auto-airdrop</span>
@@ -77,7 +78,8 @@ export default function Home() {
               <span className="num">{s ? s.airdroppedSol.toFixed(4) : "—"} SOL</span>
             </div>
             <p className="border-t pt-2 text-muted-foreground">
-              10% of every creator fee from tokens COWBOT launches is airdropped weekly. No claim button. Moo.
+              ALL of COWBOT&apos;s profit — trading + selling its launch buys — is airdropped to $COPYCOW holders every week. Each launched coin&apos;s creator rewards go to that coin&apos;s holders daily. No claim button. Moo.
+              {s && s.airdropPeriodPnlSol < 0 && <span className="block pt-1 text-amber">Down {Math.abs(s.airdropPeriodPnlSol).toFixed(4)} SOL this period — losses are made back before the next airdrop.</span>}
             </p>
           </div>
         </Window>
@@ -115,9 +117,9 @@ export default function Home() {
       <Window title="STATS.INI" icon="⚙">
         <div className="grid grid-cols-2 gap-px bg-border">
           <Stat className="border-0" label="Tokens launched" value={s?.tokensLaunched ?? "—"} sub={s ? `${s.launchMode} mode` : ""} />
-          <Stat className="border-0" label="Creator + copy fees" value={s ? s.totalFeesSol.toFixed(3) : "—"} sub="SOL all-time" />
-          <Stat className="border-0" label="→ Holders (10%)" value={s ? s.holdersTotalSol.toFixed(4) : "—"} sub="SOL" valueClass="text-win" />
-          <Stat className="border-0" label="Grazing cycles" value={s?.cycleCount ?? "—"} sub="every 5 min" />
+          <Stat className="border-0" label="Launch-sale P&L" value={s ? `${s.launchPnlSol >= 0 ? "+" : ""}${s.launchPnlSol.toFixed(3)}` : "—"} sub="SOL → $COPYCOW holders" valueClass={pnlClass(s?.launchPnlSol)} />
+          <Stat className="border-0" label="→ Coin holders" value={s ? s.coinRewardsSol.toFixed(3) : "—"} sub="SOL launched-coin rewards" valueClass="text-win" />
+          <Stat className="border-0" label="$COPYCOW rewards" value={s ? s.creatorRewardsSol.toFixed(3) : "—"} sub={s ? `COWBOT 10% ${s.agentShareSol.toFixed(3)} · team 90% ${s.teamShareSol.toFixed(3)}` : "SOL"} />
         </div>
       </Window>
 

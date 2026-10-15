@@ -74,7 +74,9 @@ export default function HistoryPage() {
               return (
                 <TableRow key={t.id}>
                   <TableCell className="text-muted-foreground">{dt(t.exit_ts)}</TableCell>
-                  <TableCell className="font-bold">{t.symbol}</TableCell>
+                  <TableCell className="font-bold">
+                  {t.symbol} {t.kind === "launch" && <Badge variant="amber">launch buy</Badge>}
+                </TableCell>
                   <TableCell className="text-right">{usd(t.entry_price)}</TableCell>
                   <TableCell className="text-right">{usd(t.exit_price)}</TableCell>
                   <TableCell className="text-right">{t.size_sol} SOL</TableCell>

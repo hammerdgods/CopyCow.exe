@@ -12,7 +12,7 @@ const pixel = VT323({ subsets: ["latin"], weight: "400", variable: "--font-pixel
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://copycow.xyz"),
   title: { default: "copycow.exe — Copy the Smartest Cow in the Room", template: "%s · copycow.exe" },
-  description: "COWBOT is a public AI trading agent on Solana. Watch its live trades and win rate. 10% of its token-launch creator fees are airdropped weekly to $COPYCOW holders.",
+  description: "COWBOT is a public AI trading agent on Solana. Watch its live trades and win rate. All its profits are airdropped weekly to $COPYCOW holders, and each coin it launches pays its creator rewards to that coin's holders.",
   openGraph: { title: "copycow.exe", description: "Copy the Smartest Cow in the Room.", url: "https://copycow.xyz" },
 };
 

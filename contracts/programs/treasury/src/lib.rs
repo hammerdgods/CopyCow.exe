@@ -1,5 +1,8 @@
-//! # TREASURY — the 90% reinvestment pool
+//! # TREASURY — COWBOT's capital vault (its max-10% share of creator rewards)
 //!
+//! The team's 90% never comes here — it goes straight to the team wallet via
+//! the dividend contract's `route_creator_rewards`. This vault is optional
+//! extra protection for COWBOT's OWN capital:
 //! * Anyone can deposit SOL.
 //! * Only the AGENT key can spend, and only within limits enforced on-chain:
 //!   - a DAILY spending limit (all purposes combined)

@@ -3,10 +3,13 @@ import { getMeta } from "@copycow/shared/db";
 import { HEARTBEAT_STALE_MINUTES, LAMPORTS_PER_SOL } from "@copycow/shared/constants";
 import { equityCurve, maxDrawdown, monthlyReturns, rollingWinRate, winRate } from "@copycow/shared/stats";
 import { verifyProofChain, type ProofEntry } from "@copycow/shared/proof";
+import { airdropPreview } from "@copycow/shared/split";
 import { db } from "./db";
 import type { AirdropsData, LaunchesData, LogRow, Performance, ProofData, Summary, Trade } from "./types";
 
 const L = LAMPORTS_PER_SOL;
+/** Which airdrop record to headline: real once COWBOT launches for real, otherwise the paper record. */
+const airdropMode = (): "paper" | "real" => ((process.env.LAUNCH_MODE ?? "paper").trim().toLowerCase() === "real" ? "real" : "paper");
 const num = (v: string | null, d: number) => (v === null || v === "" || !Number.isFinite(Number(v)) ? d : Number(v));
 
 /** Next weekly airdrop: Monday 00:05 UTC (matches the default AIRDROP_CRON). */
@@ -23,10 +26,13 @@ export function getSummary(): Summary {
   const hb = getMeta(d, "heartbeat");
   const status = getMeta(d, "agent_status");
   const live = !!hb && status === "live" && Date.now() - new Date(hb).getTime() < HEARTBEAT_STALE_MINUTES * 60_000;
-  const closed = d.prepare("SELECT pnl_sol, exit_ts FROM trades WHERE status='closed'").all() as { pnl_sol: number; exit_ts: string }[];
+  // Win rate = COWBOT's trading signals; P&L = everything (trading + launch sales).
+  const closed = d.prepare("SELECT pnl_sol, exit_ts FROM trades WHERE status='closed' AND kind='momentum'").all() as { pnl_sol: number; exit_ts: string }[];
+  const allClosed = d.prepare("SELECT pnl_sol, exit_ts, kind FROM trades WHERE status='closed'").all() as { pnl_sol: number; exit_ts: string; kind: string }[];
   const today = new Date().toISOString().slice(0, 10);
-  const fees = d.prepare("SELECT COALESCE(SUM(amount_lamports),0) a, COALESCE(SUM(holder_lamports),0) h FROM fee_receipts").get() as { a: number; h: number };
-  const pool = d.prepare("SELECT COALESCE(SUM(holder_lamports),0) s FROM fee_receipts WHERE airdrop_epoch_id IS NULL").get() as { s: number };
+  const rewards = d.prepare("SELECT COALESCE(SUM(amount_lamports),0) a, COALESCE(SUM(agent_lamports),0) g, COALESCE(SUM(team_lamports),0) t FROM fee_receipts WHERE source_type='copycow_reward'").get() as { a: number; g: number; t: number };
+  const coin = d.prepare("SELECT COALESCE(SUM(amount_lamports),0) a FROM fee_receipts WHERE source_type='launch_reward'").get() as { a: number };
+  const preview = airdropPreview(d, airdropMode());
   const airdropped = d.prepare("SELECT COALESCE(SUM(total_lamports),0) s FROM airdrop_epochs WHERE status IN ('paper','completed','partial','published')").get() as { s: number };
   return {
     live,
@@ -44,13 +50,17 @@ export function getSummary(): Summary {
     closedTrades: closed.length,
     wins: closed.filter((t) => t.pnl_sol > 0).length,
     losses: closed.filter((t) => t.pnl_sol <= 0).length,
-    totalPnlSol: closed.reduce((s, t) => s + t.pnl_sol, 0),
-    todayPnlSol: closed.filter((t) => t.exit_ts.startsWith(today)).reduce((s, t) => s + t.pnl_sol, 0),
+    totalPnlSol: allClosed.reduce((s, t) => s + t.pnl_sol, 0),
+    todayPnlSol: allClosed.filter((t) => t.exit_ts.startsWith(today)).reduce((s, t) => s + t.pnl_sol, 0),
+    launchPnlSol: allClosed.filter((t) => t.kind === "launch").reduce((s, t) => s + t.pnl_sol, 0),
     startingCapitalSol: num(getMeta(d, "paper_starting_capital_sol"), 100),
-    openPositions: (d.prepare("SELECT COUNT(*) n FROM trades WHERE status='open'").get() as { n: number }).n,
-    dividendPoolSol: pool.s / L,
-    totalFeesSol: fees.a / L,
-    holdersTotalSol: fees.h / L,
+    openPositions: (d.prepare("SELECT COUNT(*) n FROM trades WHERE status='open' AND kind='momentum'").get() as { n: number }).n,
+    airdropPoolSol: preview.poolLamports / L,
+    airdropPeriodPnlSol: (preview.tradingPnlLamports + preview.launchPnlLamports) / L,
+    creatorRewardsSol: rewards.a / L,
+    agentShareSol: rewards.g / L,
+    teamShareSol: rewards.t / L,
+    coinRewardsSol: coin.a / L,
     tokensLaunched: (d.prepare("SELECT COUNT(*) n FROM launched_tokens WHERE status IN ('launched','paper_launched')").get() as { n: number }).n,
     airdroppedSol: airdropped.s / L,
     nextAirdropAt: nextAirdropAt(),
@@ -107,20 +117,30 @@ export function getLaunches(): LaunchesData {
     .prepare(
       `SELECT lt.id, lt.trend_term, lt.name, lt.ticker, lt.mode, lt.status, lt.mint, lt.tx_signature, lt.launch_buy_sol, lt.launched_at,
               tr.score AS trend_score,
-              COALESCE(SUM(f.amount_lamports),0) AS fees_lamports, COALESCE(SUM(f.holder_lamports),0) AS holder_lamports,
-              COALESCE(SUM(f.treasury_lamports),0) AS treasury_lamports, COALESCE(MAX(f.simulated),0) AS simulated_fees
+              COALESCE(SUM(f.amount_lamports),0) AS fees_lamports,
+              COALESCE(SUM(CASE WHEN f.airdrop_epoch_id IS NOT NULL THEN f.amount_lamports ELSE 0 END),0) AS airdropped_lamports,
+              COALESCE(MAX(f.simulated),0) AS simulated_fees,
+              (SELECT pnl_sol FROM trades t WHERE t.launched_token_id = lt.id AND t.kind='launch' ORDER BY t.id DESC LIMIT 1) AS launch_pnl_sol,
+              (SELECT status FROM trades t WHERE t.launched_token_id = lt.id AND t.kind='launch' ORDER BY t.id DESC LIMIT 1) AS launch_status
          FROM launched_tokens lt
          LEFT JOIN trends tr ON tr.id = lt.trend_id
-         LEFT JOIN fee_receipts f ON f.launched_token_id = lt.id AND f.source_type='creator_fee'
+         LEFT JOIN fee_receipts f ON f.launched_token_id = lt.id AND f.source_type='launch_reward'
         GROUP BY lt.id ORDER BY lt.launched_at DESC`,
     )
     .all() as LaunchesData["tokens"];
-  const creator = d.prepare("SELECT COALESCE(SUM(amount_lamports),0) a, COALESCE(SUM(holder_lamports),0) h, COALESCE(SUM(treasury_lamports),0) t FROM fee_receipts WHERE source_type='creator_fee'").get() as { a: number; h: number; t: number };
+  const creator = d.prepare(`SELECT COALESCE(SUM(amount_lamports),0) a, COALESCE(SUM(agent_lamports),0) g, COALESCE(SUM(team_lamports),0) t,
+      COALESCE(SUM(CASE WHEN team_status='sent' THEN team_lamports ELSE 0 END),0) sent FROM fee_receipts WHERE source_type='copycow_reward'`).get() as { a: number; g: number; t: number; sent: number };
+  const coin = d.prepare(`SELECT COALESCE(SUM(amount_lamports),0) a, COALESCE(SUM(CASE WHEN airdrop_epoch_id IS NOT NULL THEN amount_lamports ELSE 0 END),0) dropped
+      FROM fee_receipts WHERE source_type='launch_reward'`).get() as { a: number; dropped: number };
+  const launchPnl = (d.prepare("SELECT COALESCE(SUM(pnl_sol),0) s FROM trades WHERE kind='launch' AND status='closed'").get() as { s: number }).s;
   const copy = d.prepare("SELECT COALESCE(SUM(amount_lamports),0) a FROM fee_receipts WHERE source_type='copytrade_fee'").get() as { a: number };
   const trends = d.prepare("SELECT * FROM trends ORDER BY detected_at DESC, score DESC LIMIT 40").all() as LaunchesData["trends"];
   return {
     tokens,
-    totals: { feesSol: creator.a / L, holdersSol: creator.h / L, treasurySol: creator.t / L, copytradeFeesSol: copy.a / L },
+    totals: {
+      coinRewardsSol: coin.a / L, coinRewardsAirdroppedSol: coin.dropped / L, launchPnlSol: launchPnl,
+      copycowRewardsSol: creator.a / L, agentSol: creator.g / L, teamSol: creator.t / L, teamSentSol: creator.sent / L, copytradeFeesSol: copy.a / L,
+    },
     trends,
     launchMode: getMeta(d, "launch_mode") ?? "paper",
   };
@@ -128,13 +148,16 @@ export function getLaunches(): LaunchesData {
 
 export function getAirdrops(): AirdropsData {
   const d = db();
-  const epochs = d.prepare("SELECT * FROM airdrop_epochs ORDER BY id DESC").all() as AirdropsData["epochs"];
-  const pool = d.prepare("SELECT COALESCE(SUM(holder_lamports),0) s FROM fee_receipts WHERE airdrop_epoch_id IS NULL").get() as { s: number };
+  const epochs = d.prepare(`SELECT e.*, lt.ticker FROM airdrop_epochs e LEFT JOIN launched_tokens lt ON lt.id = e.launched_token_id
+      WHERE e.status != 'rolled_over' ORDER BY e.id DESC`).all() as AirdropsData["epochs"];
+  const p = airdropPreview(d, airdropMode());
   return {
     epochs,
-    pendingPoolSol: pool.s / L,
+    pendingPoolSol: p.poolLamports / L,
+    periodPnlSol: (p.tradingPnlLamports + p.launchPnlLamports) / L,
+    copytradeFeesSol: p.copytradeFeesLamports / L,
     nextAirdropAt: nextAirdropAt(),
-    totalAirdroppedSol: epochs.filter((e) => e.status !== "rolled_over").reduce((s, e) => s + e.total_lamports, 0) / L,
+    totalAirdroppedSol: epochs.reduce((s, e) => s + e.total_lamports, 0) / L,
     mintConfigured: !!process.env.COPYCOW_MINT?.trim(),
   };
 }

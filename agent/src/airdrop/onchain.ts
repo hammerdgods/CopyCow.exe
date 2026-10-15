@@ -1,15 +1,16 @@
 /**
- * Talks to the on-chain DIVIDEND AIRDROP contract (REAL mode only).
- *   • depositToDividendContract: after claiming creator fees, send exactly
- *     10% into the contract vault (the contract itself enforces the 10%).
- *   • publishAndPushEpoch: publish the weekly Merkle root, then push SOL to
+ * Talks to the on-chain COPYCOW MONEY CONTRACT (dividend_airdrop program).
+ *   • routeTeamShare: after claiming $COPYCOW's creator rewards, the contract
+ *     sends 90% to the team wallet (it enforces the split and the team address).
+ *   • depositForHolders: COWBOT deposits holder money — its weekly profit (for
+ *     $COPYCOW holders) or a launched coin's rewards (for that coin's holders).
+ *   • publishAndPushEpoch: publish an airdrop's Merkle root, then push SOL to
  *     every holder in batches. COWBOT's wallet is the relayer and pays the fees.
- * If DIVIDEND_PROGRAM_ID isn't set yet, these skip with a clear TODO and the
- * holder share stays tracked in the database (nothing is lost).
  */
 import anchor, { type Idl, type Program as ProgramT } from "@coral-xyz/anchor";
 import { PublicKey } from "@solana/web3.js";
 import { airdropLeaf, buildMerkleTree, type DB, nowIso } from "@copycow/shared";
+import { PublicKey as PK, SystemProgram, Transaction, sendAndConfirmTransaction } from "@solana/web3.js";
 import { config } from "../config";
 import { say } from "../log";
 import { connection } from "../rpc";
@@ -43,23 +44,42 @@ export async function nextOnchainEpoch(db: DB): Promise<number | null> {
   return Number(d.currentEpoch) + 1;
 }
 
-export async function depositToDividendContract(db: DB, grossLamports: number, ref: string): Promise<void> {
-  if (config.launchMode !== "real") return;
-  const prog = program(db);
-  if (!prog) {
-    say("warn", "TODO: DIVIDEND_PROGRAM_ID not set — the holders' 10% is tracked in the database and stays in the agent wallet until the contract is deployed.");
-    return;
-  }
+/** True when the money contract is configured (DIVIDEND_PROGRAM_ID set). */
+export const contractConfigured = (): boolean => !!config.dividendProgramId;
+
+/**
+ * Sends the team's 90% of `grossLamports` creator rewards to the team wallet.
+ * Uses the contract when configured (it computes the split and enforces the
+ * team address); otherwise a plain SOL transfer of `teamLamports`.
+ * Returns the transaction signature.
+ */
+export async function routeTeamShare(db: DB, grossLamports: number, teamLamports: number): Promise<string> {
+  if (!config.teamWallet) throw new Error("TEAM_WALLET is not set in .env");
   const agent = loadOrCreateWallet(db).keypair;
-  const sig = await prog.methods
-    .depositFromTreasury(new BN(grossLamports), { creatorFee: {} })
-    .accounts({ treasury: agent.publicKey })
-    .rpc();
-  say("fee", `Deposited the holders' 10% of ${grossLamports / 1e9} SOL into the dividend contract (tx ${sig}, ref ${ref.slice(0, 12)}…)`);
+  const team = new PK(config.teamWallet);
+  const prog = program(db);
+  if (prog) {
+    return prog.methods.routeCreatorRewards(new BN(grossLamports)).accounts({ agent: agent.publicKey, teamWallet: team }).rpc();
+  }
+  const tx = new Transaction().add(SystemProgram.transfer({ fromPubkey: agent.publicKey, toPubkey: team, lamports: teamLamports }));
+  return sendAndConfirmTransaction(connection(), tx, [agent], { commitment: "confirmed" });
+}
+
+export type AirdropKind = "cowbot_profit" | "coin_rewards";
+const kindArg = (k: AirdropKind) => (k === "cowbot_profit" ? { cowbotProfit: {} } : { launchedCoinRewards: {} });
+
+/** Deposits holder money into the contract vault ahead of an airdrop. */
+export async function depositForHolders(db: DB, lamports: number, kind: AirdropKind, tokenMint: string): Promise<string> {
+  const prog = program(db);
+  if (!prog) throw new Error("DIVIDEND_PROGRAM_ID is not set");
+  const agent = loadOrCreateWallet(db).keypair;
+  return prog.methods.depositForHolders(new BN(lamports), kindArg(kind), new PK(tokenMint)).accounts({ agent: agent.publicKey }).rpc();
 }
 
 interface EpochRow {
   id: number;
+  kind: AirdropKind;
+  token_mint: string;
   merkle_epoch: number;
   merkle_root: string;
   total_lamports: number;
@@ -94,7 +114,8 @@ export async function publishAndPushEpoch(db: DB, epochId: number): Promise<void
     if (next !== epoch.merkle_epoch) rebuildTree(db, epochId, next);
     Object.assign(epoch, db.prepare("SELECT * FROM airdrop_epochs WHERE id=?").get(epochId));
     const sig = await prog.methods
-      .distribute(Array.from(Buffer.from(epoch.merkle_root, "hex")), new BN(epoch.total_lamports), epoch.wallets_paid, new BN(epoch.snapshot_slot))
+      .distribute(Array.from(Buffer.from(epoch.merkle_root, "hex")), new BN(epoch.total_lamports), epoch.wallets_paid, new BN(epoch.snapshot_slot),
+        new PK(epoch.token_mint), kindArg(epoch.kind))
       .accounts({ relayer: agent.publicKey, epoch: epochPda(prog.programId, epoch.merkle_epoch) })
       .rpc();
     sigs.push(sig);
@@ -146,8 +167,16 @@ function rebuildTree(db: DB, epochId: number, merkleEpoch: number): void {
   })();
 }
 
-/** Finish any airdrop that was interrupted. */
+/** Finish any airdrop that was interrupted (deposit, publish or payouts). */
 export async function resumeAirdrops(db: DB): Promise<void> {
-  const rows = db.prepare("SELECT id FROM airdrop_epochs WHERE mode='real' AND status IN ('pending','ready','published','partial') ORDER BY id").all() as { id: number }[];
-  for (const r of rows) await publishAndPushEpoch(db, r.id);
+  const rows = db
+    .prepare("SELECT id, total_lamports, status, kind, token_mint FROM airdrop_epochs WHERE mode='real' AND status IN ('deposit_pending','pending','ready','published','partial') ORDER BY id")
+    .all() as { id: number; total_lamports: number; status: string; kind: AirdropKind; token_mint: string }[];
+  for (const r of rows) {
+    if (r.status === "deposit_pending") {
+      const sig = await depositForHolders(db, r.total_lamports, r.kind, r.token_mint);
+      db.prepare("UPDATE airdrop_epochs SET status='pending', tx_signatures=? WHERE id=?").run(JSON.stringify([sig]), r.id);
+    }
+    await publishAndPushEpoch(db, r.id);
+  }
 }

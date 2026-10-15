@@ -38,6 +38,10 @@ export const config = {
   rutPauseMinutes: envNum("RUT_PAUSE_MINUTES", 60),
   minLiquidityUsd: envNum("MIN_LIQUIDITY_USD", 250_000),
   minUniqueBuyers24h: envNum("MIN_UNIQUE_BUYERS_24H", 300),
+  // Scam / wash-trading filters (fresh relaunches trading 30x their own size)
+  minPoolAgeHours: envNum("MIN_POOL_AGE_HOURS", 72),
+  minMarketCapUsd: envNum("MIN_MARKET_CAP_USD", 5_000_000),
+  maxVolumeToMarketCap: envNum("MAX_VOLUME_TO_MARKET_CAP", 3),
   paperSlippageBps: envNum("PAPER_SLIPPAGE_BPS", 30),
   paperStartingCapitalSol: envNum("PAPER_STARTING_CAPITAL_SOL", 100),
 
@@ -62,13 +66,23 @@ export const config = {
   paperTreasuryStartSol: envNum("PAPER_TREASURY_START_SOL", 10),
   launchPriorityFeeSol: envNum("LAUNCH_PRIORITY_FEE_SOL", 0.0005),
   launchSlippagePct: envNum("LAUNCH_SLIPPAGE_PCT", 10),
+  /** Sell COWBOT's launch buy when it's worth this many times what it cost… */
+  launchTakeProfitX: envNum("LAUNCH_TAKE_PROFIT_X", 2),
+  /** …or after this many hours, whichever comes first. */
+  launchMaxHoldHours: envNum("LAUNCH_MAX_HOLD_HOURS", 24),
   tokenSocialX: envStr("TOKEN_SOCIAL_X", "https://x.com/copycowexe"),
   tokenWebsite: envStr("TOKEN_WEBSITE", "https://copycow.xyz"),
 
-  // ---- Fees + airdrops ----
+  // ---- Money split + airdrops ----
+  /** Receives 90% of every creator reward (marketing). Required before any real claim. */
+  teamWallet: envStr("TEAM_WALLET"),
+  /** Daily airdrop of each launched coin's creator rewards to that coin's holders. */
+  coinAirdropCron: envStr("COIN_AIRDROP_CRON", "20 0 * * *"),
+  /** Minimum tokens of a launched coin to receive its rewards airdrop. */
+  coinAirdropMinTokens: envNum("COIN_AIRDROP_MIN_TOKENS", 1),
   feePollCron: envStr("FEE_POLL_CRON", "*/30 * * * *"),
   creatorFeeBpsEstimate: envNum("CREATOR_FEE_BPS_ESTIMATE", 5),
-  paperFeeCapturePct: envNum("PAPER_FEE_CAPTURE_PCT", 5),
+  paperFeeCapturePct: envNum("PAPER_FEE_CAPTURE_PCT", 2),
   paperFeeSimDays: envNum("PAPER_FEE_SIM_DAYS", 7),
   creatorFeeClaimMinSol: envNum("CREATOR_FEE_CLAIM_MIN_SOL", 0.01),
   copycowMint: envStr("COPYCOW_MINT"),

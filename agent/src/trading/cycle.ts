@@ -13,6 +13,7 @@ import type { PoolInfo } from "../market/geckoterminal";
 import { getPrices } from "../market/prices";
 import { evaluateEntry, evaluateExit } from "../strategy/momentum";
 import { closePaperTrade, markPrice, openPaperTrade, openTrades, type TradeRow } from "./paper-broker";
+import { manageLaunchPositions } from "../token-launcher/positions";
 
 export function heartbeat(db: DB, status = "live"): void {
   setMeta(db, "heartbeat", nowIso());
@@ -25,7 +26,7 @@ export function heartbeat(db: DB, status = "live"): void {
 function cooldowns(db: DB, now: number): Map<string, number> {
   const since = new Date(now - config.cooldownAfterLossMinutes * 60_000).toISOString();
   const rows = db
-    .prepare("SELECT mint, exit_ts FROM trades WHERE status='closed' AND pnl_sol < 0 AND exit_ts > ?")
+    .prepare("SELECT mint, exit_ts FROM trades WHERE status='closed' AND kind='momentum' AND pnl_sol < 0 AND exit_ts > ?")
     .all(since) as { mint: string; exit_ts: string }[];
   const map = new Map<string, number>();
   for (const r of rows) map.set(r.mint, new Date(r.exit_ts).getTime() + config.cooldownAfterLossMinutes * 60_000);
@@ -37,7 +38,7 @@ function inRut(db: DB, now: number): boolean {
   const n = config.rutAfterConsecutiveLosses;
   if (n <= 0) return false;
   const last = db
-    .prepare("SELECT pnl_sol, exit_ts FROM trades WHERE status='closed' ORDER BY exit_ts DESC LIMIT ?")
+    .prepare("SELECT pnl_sol, exit_ts FROM trades WHERE status='closed' AND kind='momentum' ORDER BY exit_ts DESC LIMIT ?")
     .all(n) as { pnl_sol: number; exit_ts: string }[];
   if (last.length < n || !last.every((t) => t.pnl_sol < 0)) return false;
   return now - new Date(last[0].exit_ts).getTime() < config.rutPauseMinutes * 60_000;
@@ -88,6 +89,13 @@ export async function runTradingCycle(db: DB): Promise<void> {
     if (ex.reason === "take_profit") say("win", `Fresh grass: took profit on ${t.symbol} at ${fmtPct(closed.pnl_pct!)} (${fmtSol(closed.pnl_sol!)})`);
     else if (ex.reason === "stop_loss") say("loss", `Rut: stopped out of ${t.symbol} at ${fmtPct(closed.pnl_pct!)} (${fmtSol(closed.pnl_sol!)}). No revenge trades — cooling off.`);
     else say(closed.pnl_sol! >= 0 ? "win" : "loss", `Grazed long enough on ${t.symbol}: time exit at ${fmtPct(closed.pnl_pct!)} (${fmtSol(closed.pnl_sol!)})`);
+  }
+
+  // 3b) Launch buys: sell at 2x or after 24h
+  try {
+    await manageLaunchPositions(db);
+  } catch (e) {
+    say("warn", `Launch-position check hiccup: ${(e as Error).message}`);
   }
 
   // 4) Entries

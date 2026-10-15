@@ -41,7 +41,32 @@ export function normalizeTerm(raw: string): string {
     .replace(/[^a-z0-9]/g, "");
 }
 
+/**
+ * Words COWBOT must never launch a token about (slurs, sexual violence,
+ * hate, extremism, self-harm, hard drugs, scams).
+ * BLOCKED_ANYWHERE: blocked even inside another word ("xrapex").
+ * BLOCKED_EXACT:    short words that would otherwise hit innocent words
+ *                   ("coon" vs raccoon, "spic" vs spicy, "meth" vs method).
+ */
+const BLOCKED_ANYWHERE = [
+  "rape", "rapist", "nigg", "faggot", "retard", "tranny", "kike", "chink", "wetback", "nazi", "hitler", "kkk",
+  "jihad", "terroris", "pedo", "loli", "childporn", "porn", "pussy", "cunt", "whore", "slut", "suicide",
+  "murder", "massacre", "genocide", "holocaust", "cocaine", "heroin", "fentanyl", "rugpull", "ponzi", "molest",
+];
+const BLOCKED_EXACT = new Set(["fag", "spic", "coon", "gook", "isis", "meth", "sex", "cum", "cock", "dick", "kill", "scam", "rug"]);
+
+/** Innocent words that happen to contain a blocked piece ("grape" ⊃ "rape"). Removed before checking. */
+const INNOCENT_CONTAINING = ["grape", "drape", "scrape", "trapez", "therapist", "parapet", "skunk", "snigger"];
+
+export const isBlockedTerm = (term: string): boolean => {
+  let t = term.toLowerCase().replace(/0/g, "o").replace(/1/g, "i").replace(/3/g, "e").replace(/4/g, "a").replace(/5/g, "s").replace(/[^a-z]/g, "");
+  if (BLOCKED_EXACT.has(t)) return true;
+  for (const ok of INNOCENT_CONTAINING) t = t.split(ok).join("-");
+  return BLOCKED_EXACT.has(t) || BLOCKED_ANYWHERE.some((b) => t.includes(b));
+};
+
 export function isMemeable(term: string): boolean {
+  if (isBlockedTerm(term)) return false;
   if (term.length < 3 || term.length > 14) return false;
   if (!/^[a-z][a-z0-9]*$/.test(term)) return false;
   if ((term.match(/[0-9]/g) ?? []).length > 2) return false;

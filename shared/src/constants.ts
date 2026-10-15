@@ -7,25 +7,27 @@
  */
 
 /**
- * FOUNDER RULE: max 10%, do not change.
- * Share of ALL creator fees (and copytrade performance fees) that goes
- * to $COPYCOW holders as the weekly airdrop. This is a hard-coded constant
- * on purpose. It is NOT read from .env and must never exceed 1000 (10%).
+ * FOUNDER RULE: COWBOT keeps max 10% of creator rewards, do not change.
+ * pump.fun creator rewards (from $COPYCOW AND from every token COWBOT
+ * launches) are split the moment they're claimed:
+ *   • 10% → COWBOT (its trading capital) — hard-coded, never more
+ *   • 90% → the TEAM WALLET (marketing) — sent straight away, COWBOT never touches it
+ * COWBOT's net trading PROFIT is what gets airdropped to $COPYCOW holders weekly.
  * The same number is hard-coded in the on-chain contract
- * (contracts/programs/dividend_airdrop/src/lib.rs → HOLDER_FEE_BPS).
+ * (contracts/programs/dividend_airdrop/src/lib.rs → AGENT_SHARE_BPS).
  */
-export const HOLDER_FEE_BPS = 1000 as const; // 10% — FOUNDER RULE: MAX 10%, DO NOT CHANGE
+export const AGENT_SHARE_BPS = 1000 as const; // 10% — FOUNDER RULE: COWBOT KEEPS MAX 10%, DO NOT CHANGE
 
 /** 100% expressed in basis points. */
 export const BPS_DENOMINATOR = 10_000 as const;
 
-/** Whatever is not paid to holders stays in the treasury (90%). */
-export const TREASURY_FEE_BPS = BPS_DENOMINATOR - HOLDER_FEE_BPS; // 9000 = 90%
+/** The team's share of creator rewards (90%). */
+export const TEAM_SHARE_BPS = BPS_DENOMINATOR - AGENT_SHARE_BPS; // 9000 = 90%
 
 // Safety net: if someone ever edits the constant above to more than 10%,
 // every program refuses to start.
-if (HOLDER_FEE_BPS > 1000 || HOLDER_FEE_BPS < 0) {
-  throw new Error("FOUNDER RULE VIOLATED: HOLDER_FEE_BPS must be <= 1000 (10%).");
+if (AGENT_SHARE_BPS > 1000 || AGENT_SHARE_BPS < 0) {
+  throw new Error("FOUNDER RULE VIOLATED: AGENT_SHARE_BPS must be <= 1000 (10%).");
 }
 
 export const LAMPORTS_PER_SOL = 1_000_000_000;

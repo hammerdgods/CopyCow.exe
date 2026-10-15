@@ -4,9 +4,14 @@
  *   2. Total launch spend ≤ LAUNCH_TOTAL_BUDGET_SOL (default 5 SOL)
  *   3. Wallet must stay above WALLET_FLOOR_SOL after the launch
  *   4. Never launch the same trend twice in 7 days
+ *   5. Never launch anything on the bad-word blocklist
+ * COWBOT only ever spends its OWN capital: money waiting for the team, for a
+ * launched coin's holders, or for the weekly $COPYCOW airdrop is subtracted
+ * before checking the floor.
  * Paper launches follow the same rules so the paper record is realistic.
  */
-import { type DB, LAMPORTS_PER_SOL, MAX_LAUNCHES_PER_24H } from "@copycow/shared";
+import { type DB, LAMPORTS_PER_SOL, MAX_LAUNCHES_PER_24H, owedToOthersLamports } from "@copycow/shared";
+import { isBlockedTerm } from "../trend-scanner/extract";
 import { config } from "../config";
 import { loadOrCreateWallet, walletBalanceSol } from "../wallet/wallet";
 
@@ -14,12 +19,17 @@ import { loadOrCreateWallet, walletBalanceSol } from "../wallet/wallet";
 export const LAUNCH_OVERHEAD_SOL = 0.03;
 
 export async function availableBalanceSol(db: DB, mode: "paper" | "real"): Promise<number> {
-  if (mode === "real") return walletBalanceSol(loadOrCreateWallet().keypair.publicKey);
+  if (mode === "real") {
+    const wallet = await walletBalanceSol(loadOrCreateWallet().keypair.publicKey);
+    // Team money, coin-holder rewards and holders' weekly profit are never COWBOT's to spend.
+    return wallet - owedToOthersLamports(db) / LAMPORTS_PER_SOL;
+  }
   const row = db.prepare("SELECT COALESCE(SUM(amount_lamports),0) AS s FROM treasury_ledger WHERE simulated = 1").get() as { s: number };
   return config.paperTreasuryStartSol + row.s / LAMPORTS_PER_SOL;
 }
 
 export async function checkLaunchSafety(db: DB, mode: "paper" | "real", term: string): Promise<{ ok: boolean; reason: string }> {
+  if (isBlockedTerm(term)) return { ok: false, reason: "term is on the bad-word blocklist" };
   const dayAgo = new Date(Date.now() - 86_400_000).toISOString();
   const recent = (db.prepare("SELECT COUNT(*) AS n FROM launched_tokens WHERE mode=? AND launched_at >= ? AND status IN ('launched','paper_launched','pending')").get(mode, dayAgo) as { n: number }).n;
   if (recent >= MAX_LAUNCHES_PER_24H) return { ok: false, reason: `already launched ${recent} token in the last 24h (max ${MAX_LAUNCHES_PER_24H})` };

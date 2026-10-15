@@ -1,17 +1,20 @@
-//! # DIVIDEND AIRDROP — the most important contract in copycow.exe
+//! # COPYCOW MONEY CONTRACT — creator-reward split + holder airdrops
 //!
 //! Plain-English summary:
-//! * Fees come in (pump.fun creator fees + copytrade performance fees).
-//! * EXACTLY 10% goes into this contract's vault for $COPYCOW holders;
-//!   the other 90% goes to the treasury (the agent wallet).
-//! * Once a week the keeper ("relayer") publishes a Merkle root: one small
-//!   fingerprint that commits to the full list of (holder wallet, amount)
-//!   computed from a token-balance snapshot taken at a fixed slot.
-//! * The relayer then PUSHES SOL straight into each holder's wallet in
-//!   batches, proving each payment against the root. Holders never click
-//!   "claim" and never pay gas — the relayer pays once per batch.
-//! * Every payout can only happen once (tracked in a bitmap), and the
-//!   contract can never pay out more than the vault holds.
+//! * $COPYCOW's pump.fun creator rewards land in COWBOT's wallet. COWBOT calls
+//!   `route_creator_rewards`: the contract sends 90% straight to the TEAM
+//!   WALLET (marketing, untouched by COWBOT) and COWBOT keeps at most 10% as
+//!   trading capital. COWBOT cannot change the team wallet.
+//! * Creator rewards from coins COWBOT LAUNCHES belong 100% to that coin's
+//!   holders: COWBOT deposits them here daily (`deposit_for_holders`, kind
+//!   LaunchedCoinRewards) and they're airdropped to that coin's holders.
+//! * All of COWBOT's PROFIT (trading + selling its launch buys) is deposited
+//!   weekly (kind CowbotProfit) and airdropped to $COPYCOW holders.
+//! * For every airdrop the keeper ("relayer") publishes a Merkle root of every
+//!   holder + amount (snapshot at a fixed slot) and PUSHES SOL into each
+//!   wallet in batches. Holders never click "claim" and never pay gas.
+//! * Every payout can only happen once (bitmap), and the contract can never pay
+//!   out more than the vault holds.
 
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::hash::hashv;
@@ -20,15 +23,15 @@ use anchor_lang::system_program;
 declare_id!("DHvKnvryWA3RHUTbX4NCgXwMA7HwM8y7nECXMnpS648X");
 
 // ---------------------------------------------------------------------------
-// FEE SPLIT CONSTANT
+// CREATOR-REWARD SPLIT CONSTANT
 // ---------------------------------------------------------------------------
 #[constant]
-pub const HOLDER_FEE_BPS: u64 = 1000; // 10% — FOUNDER RULE: MAX 10%, DO NOT CHANGE. Remaining 9000 BPS to treasury.
+pub const AGENT_SHARE_BPS: u64 = 1000; // 10% — FOUNDER RULE: COWBOT KEEPS MAX 10% OF CREATOR REWARDS, DO NOT CHANGE. Remaining 9000 BPS to the team wallet.
 pub const BPS_DENOMINATOR: u64 = 10_000;
-pub const TREASURY_FEE_BPS: u64 = BPS_DENOMINATOR - HOLDER_FEE_BPS; // 9000 = 90% → treasury (agent wallet)
+pub const TEAM_SHARE_BPS: u64 = BPS_DENOMINATOR - AGENT_SHARE_BPS; // 9000 = 90% → team wallet (marketing, untouched)
 
-// Compile-time guard: the program will not even BUILD if someone raises the holder share above 10%.
-const _: () = assert!(HOLDER_FEE_BPS <= 1000, "FOUNDER RULE: holder share can never exceed 10%");
+// Compile-time guard: the program will not even BUILD if someone raises COWBOT's share above 10%.
+const _: () = assert!(AGENT_SHARE_BPS <= 1000, "FOUNDER RULE: COWBOT can never keep more than 10% of creator rewards");
 
 /// One bit per holder in the "already paid" bitmap; 64,000 holders = 8 KB account.
 pub const MAX_HOLDERS_PER_EPOCH: u32 = 64_000;
@@ -39,15 +42,15 @@ pub const DISTRIBUTOR_SEED: &[u8] = b"distributor";
 pub const VAULT_SEED: &[u8] = b"dividend-vault";
 pub const EPOCH_SEED: &[u8] = b"epoch";
 
-/// Splits a gross fee into (holder share, treasury share). Rounds DOWN for
-/// holders, so holders can never receive more than 10%.
-pub fn split_fee(gross_lamports: u64) -> Result<(u64, u64)> {
-    let holders = (gross_lamports as u128)
-        .checked_mul(HOLDER_FEE_BPS as u128)
+/// Splits creator rewards into (COWBOT share, team share). Rounds DOWN for
+/// COWBOT, so COWBOT can never keep more than 10%.
+pub fn split_creator_rewards(gross_lamports: u64) -> Result<(u64, u64)> {
+    let agent = (gross_lamports as u128)
+        .checked_mul(AGENT_SHARE_BPS as u128)
         .ok_or(DividendError::MathOverflow)?
         / BPS_DENOMINATOR as u128;
-    let holders = holders as u64;
-    Ok((holders, gross_lamports - holders))
+    let agent = agent as u64;
+    Ok((agent, gross_lamports - agent))
 }
 
 /// leaf = sha256(0x00 || epoch u64 LE || index u32 LE || wallet || amount u64 LE)
@@ -79,88 +82,91 @@ pub fn verify_proof(proof: &[[u8; 32]], root: &[u8; 32], leaf: [u8; 32]) -> bool
 pub mod dividend_airdrop {
     use super::*;
 
-    /// One-time setup. `treasury` = where the 90% goes (the agent wallet).
+    /// One-time setup. `agent` = COWBOT's wallet, `team_wallet` = where 90% of creator rewards go.
     pub fn initialize(ctx: Context<Initialize>, relayer: Pubkey, copycow_mint: Pubkey, epoch_seconds: i64) -> Result<()> {
         require!(epoch_seconds >= 0, DividendError::InvalidEpochLength);
         let d = &mut ctx.accounts.distributor;
         d.admin = ctx.accounts.admin.key();
-        d.treasury = ctx.accounts.treasury.key();
+        d.agent = ctx.accounts.agent.key();
+        d.team_wallet = ctx.accounts.team_wallet.key();
         d.relayer = relayer;
         d.copycow_mint = copycow_mint;
         d.epoch_seconds = epoch_seconds;
         d.current_epoch = 0;
         d.last_distribution_ts = 0;
         d.reserved_lamports = 0;
-        d.total_deposited_gross = 0;
-        d.total_to_holders = 0;
-        d.total_to_treasury = 0;
+        d.total_rewards_routed = 0;
+        d.total_to_team = 0;
+        d.total_profit_deposited = 0;
+        d.total_coin_rewards_deposited = 0;
         d.total_distributed = 0;
         d.bump = ctx.bumps.distributor;
         d.vault_bump = ctx.bumps.vault;
         Ok(())
     }
 
-    /// Anyone can pay fees in: 10% → holder vault, 90% → treasury. Split enforced here, on-chain.
-    pub fn deposit_fees(ctx: Context<DepositFees>, gross_lamports: u64, source: FeeSource) -> Result<()> {
+    /// COWBOT reports creator rewards it just claimed from pump.fun. The
+    /// contract sends 90% to the team wallet right away; COWBOT keeps max 10%.
+    pub fn route_creator_rewards(ctx: Context<RouteCreatorRewards>, gross_lamports: u64) -> Result<()> {
         require!(gross_lamports > 0, DividendError::ZeroAmount);
-        let (to_holders, to_treasury) = split_fee(gross_lamports)?;
-        let sys = ctx.accounts.system_program.to_account_info();
-        if to_holders > 0 {
-            system_program::transfer(
-                CpiContext::new(sys.clone(), system_program::Transfer {
-                    from: ctx.accounts.depositor.to_account_info(),
-                    to: ctx.accounts.vault.to_account_info(),
-                }),
-                to_holders,
-            )?;
-        }
-        if to_treasury > 0 {
-            system_program::transfer(
-                CpiContext::new(sys, system_program::Transfer {
-                    from: ctx.accounts.depositor.to_account_info(),
-                    to: ctx.accounts.treasury.to_account_info(),
-                }),
-                to_treasury,
-            )?;
-        }
-        record_deposit(&mut ctx.accounts.distributor, gross_lamports, to_holders, to_treasury, source)
-    }
-
-    /// The treasury (agent wallet) reports fees it already received (e.g. a
-    /// pump.fun creator-fee claim) and sends EXACTLY 10% of them to the vault.
-    /// The 90% simply stays in the treasury wallet.
-    pub fn deposit_from_treasury(ctx: Context<DepositFromTreasury>, gross_lamports: u64, source: FeeSource) -> Result<()> {
-        require!(gross_lamports > 0, DividendError::ZeroAmount);
-        let (to_holders, to_treasury) = split_fee(gross_lamports)?;
-        if to_holders > 0 {
+        let (to_agent, to_team) = split_creator_rewards(gross_lamports)?;
+        if to_team > 0 {
             system_program::transfer(
                 CpiContext::new(ctx.accounts.system_program.to_account_info(), system_program::Transfer {
-                    from: ctx.accounts.treasury.to_account_info(),
-                    to: ctx.accounts.vault.to_account_info(),
+                    from: ctx.accounts.agent.to_account_info(),
+                    to: ctx.accounts.team_wallet.to_account_info(),
                 }),
-                to_holders,
+                to_team,
             )?;
         }
-        record_deposit(&mut ctx.accounts.distributor, gross_lamports, to_holders, to_treasury, source)
+        let d = &mut ctx.accounts.distributor;
+        d.total_rewards_routed = d.total_rewards_routed.checked_add(gross_lamports).ok_or(DividendError::MathOverflow)?;
+        d.total_to_team = d.total_to_team.checked_add(to_team).ok_or(DividendError::MathOverflow)?;
+        emit!(CreatorRewardsRouted { gross_lamports, to_agent, to_team });
+        Ok(())
     }
 
-    /// Weekly: the keeper publishes the Merkle root for this epoch's airdrop.
-    /// The snapshot slot is the "checkpoint" the holder balances were read at.
+    /// COWBOT deposits money that belongs to holders: its weekly profit (for
+    /// $COPYCOW holders) or a launched coin's creator rewards (for that coin's holders).
+    pub fn deposit_for_holders(ctx: Context<DepositForHolders>, amount: u64, kind: AirdropKind, token_mint: Pubkey) -> Result<()> {
+        require!(amount > 0, DividendError::ZeroAmount);
+        system_program::transfer(
+            CpiContext::new(ctx.accounts.system_program.to_account_info(), system_program::Transfer {
+                from: ctx.accounts.agent.to_account_info(),
+                to: ctx.accounts.vault.to_account_info(),
+            }),
+            amount,
+        )?;
+        let d = &mut ctx.accounts.distributor;
+        match kind {
+            AirdropKind::CowbotProfit => {
+                d.total_profit_deposited = d.total_profit_deposited.checked_add(amount).ok_or(DividendError::MathOverflow)?
+            }
+            AirdropKind::LaunchedCoinRewards => {
+                d.total_coin_rewards_deposited = d.total_coin_rewards_deposited.checked_add(amount).ok_or(DividendError::MathOverflow)?
+            }
+        }
+        emit!(HolderFundsDeposited { amount, kind, token_mint });
+        Ok(())
+    }
+
+    /// The keeper publishes the Merkle root for one airdrop: `token_mint` is the
+    /// coin whose holders are paid, `kind` says what the money is. The snapshot
+    /// slot is the "checkpoint" the holder balances were read at. (Timing —
+    /// weekly profit, daily coin rewards — is COWBOT's schedule.)
     pub fn distribute(
         ctx: Context<Distribute>,
         merkle_root: [u8; 32],
         total_lamports: u64,
         holder_count: u32,
         snapshot_slot: u64,
+        token_mint: Pubkey,
+        kind: AirdropKind,
     ) -> Result<()> {
         require!(total_lamports > 0, DividendError::ZeroAmount);
         require!(holder_count > 0 && holder_count <= MAX_HOLDERS_PER_EPOCH, DividendError::TooManyHolders);
         let now = Clock::get()?.unix_timestamp;
         let d = &mut ctx.accounts.distributor;
-        if d.current_epoch > 0 {
-            let next = d.last_distribution_ts.checked_add(d.epoch_seconds).ok_or(DividendError::MathOverflow)?;
-            require!(now >= next, DividendError::EpochNotOver);
-        }
         let vault_info = ctx.accounts.vault.to_account_info();
         let rent_min = Rent::get()?.minimum_balance(vault_info.data_len());
         let available = vault_info
@@ -179,12 +185,14 @@ pub mod dividend_airdrop {
         e.snapshot_slot = snapshot_slot;
         e.created_at = now;
         e.bump = ctx.bumps.epoch;
+        e.token_mint = token_mint;
+        e.kind = kind;
         e.paid_bitmap = vec![0u8; bitmap_len(holder_count)];
 
         d.current_epoch = e.index;
         d.last_distribution_ts = now;
         d.reserved_lamports = d.reserved_lamports.checked_add(total_lamports).ok_or(DividendError::MathOverflow)?;
-        emit!(EpochPublished { epoch_index: e.index, merkle_root, total_lamports, holder_count, snapshot_slot });
+        emit!(EpochPublished { epoch_index: e.index, merkle_root, total_lamports, holder_count, snapshot_slot, token_mint, kind });
         Ok(())
     }
 
@@ -249,18 +257,16 @@ pub mod dividend_airdrop {
         ctx.accounts.distributor.relayer = new_relayer;
         Ok(())
     }
+
+    /// Only the ADMIN (founder) can change where the team's 90% goes. COWBOT can't.
+    pub fn set_team_wallet(ctx: Context<AdminOnly>, new_team_wallet: Pubkey) -> Result<()> {
+        ctx.accounts.distributor.team_wallet = new_team_wallet;
+        Ok(())
+    }
 }
 
 fn bitmap_len(holder_count: u32) -> usize {
     (holder_count as usize).div_ceil(8)
-}
-
-fn record_deposit(d: &mut Account<Distributor>, gross: u64, holders: u64, treasury: u64, source: FeeSource) -> Result<()> {
-    d.total_deposited_gross = d.total_deposited_gross.checked_add(gross).ok_or(DividendError::MathOverflow)?;
-    d.total_to_holders = d.total_to_holders.checked_add(holders).ok_or(DividendError::MathOverflow)?;
-    d.total_to_treasury = d.total_to_treasury.checked_add(treasury).ok_or(DividendError::MathOverflow)?;
-    emit!(FeesDeposited { gross_lamports: gross, to_holders: holders, to_treasury: treasury, source });
-    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -271,8 +277,10 @@ fn record_deposit(d: &mut Account<Distributor>, gross: u64, holders: u64, treasu
 pub struct Initialize<'info> {
     #[account(mut)]
     pub admin: Signer<'info>,
-    /// CHECK: any wallet can be the treasury; we only store its address.
-    pub treasury: UncheckedAccount<'info>,
+    /// CHECK: COWBOT's agent wallet; we only store its address.
+    pub agent: UncheckedAccount<'info>,
+    /// CHECK: the team wallet that receives 90% of creator rewards; we only store its address.
+    pub team_wallet: UncheckedAccount<'info>,
     #[account(init, payer = admin, space = 8 + Distributor::SIZE, seeds = [DISTRIBUTOR_SEED], bump)]
     pub distributor: Account<'info, Distributor>,
     #[account(init, payer = admin, space = 8, seeds = [VAULT_SEED], bump)]
@@ -281,24 +289,22 @@ pub struct Initialize<'info> {
 }
 
 #[derive(Accounts)]
-pub struct DepositFees<'info> {
+pub struct RouteCreatorRewards<'info> {
     #[account(mut)]
-    pub depositor: Signer<'info>,
-    #[account(mut, seeds = [DISTRIBUTOR_SEED], bump = distributor.bump, has_one = treasury)]
+    pub agent: Signer<'info>,
+    #[account(mut, seeds = [DISTRIBUTOR_SEED], bump = distributor.bump, has_one = agent, has_one = team_wallet)]
     pub distributor: Account<'info, Distributor>,
-    #[account(mut, seeds = [VAULT_SEED], bump = distributor.vault_bump)]
-    pub vault: Account<'info, Vault>,
-    /// CHECK: verified against distributor.treasury via has_one.
+    /// CHECK: verified against distributor.team_wallet via has_one — COWBOT can't redirect it.
     #[account(mut)]
-    pub treasury: UncheckedAccount<'info>,
+    pub team_wallet: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
-pub struct DepositFromTreasury<'info> {
+pub struct DepositForHolders<'info> {
     #[account(mut)]
-    pub treasury: Signer<'info>,
-    #[account(mut, seeds = [DISTRIBUTOR_SEED], bump = distributor.bump, has_one = treasury)]
+    pub agent: Signer<'info>,
+    #[account(mut, seeds = [DISTRIBUTOR_SEED], bump = distributor.bump, has_one = agent)]
     pub distributor: Account<'info, Distributor>,
     #[account(mut, seeds = [VAULT_SEED], bump = distributor.vault_bump)]
     pub vault: Account<'info, Vault>,
@@ -362,8 +368,10 @@ pub struct AdminOnly<'info> {
 #[account]
 pub struct Distributor {
     pub admin: Pubkey,
-    /// Where the 90% goes — the agent wallet.
-    pub treasury: Pubkey,
+    /// COWBOT's wallet: claims creator rewards, keeps max 10%, deposits weekly profit.
+    pub agent: Pubkey,
+    /// Receives 90% of all creator rewards (marketing). Only the admin can change it.
+    pub team_wallet: Pubkey,
     /// The keeper that publishes roots and pushes payouts.
     pub relayer: Pubkey,
     pub copycow_mint: Pubkey,
@@ -372,18 +380,19 @@ pub struct Distributor {
     pub last_distribution_ts: i64,
     /// SOL promised to published-but-not-yet-paid epochs.
     pub reserved_lamports: u64,
-    pub total_deposited_gross: u64,
-    pub total_to_holders: u64,
-    pub total_to_treasury: u64,
+    pub total_rewards_routed: u64,
+    pub total_to_team: u64,
+    pub total_profit_deposited: u64,
+    pub total_coin_rewards_deposited: u64,
     pub total_distributed: u64,
     pub bump: u8,
     pub vault_bump: u8,
 }
 impl Distributor {
-    pub const SIZE: usize = 32 * 4 + 8 * 8 + 1 + 1;
+    pub const SIZE: usize = 32 * 5 + 8 * 9 + 1 + 1;
 }
 
-/// Holds the holders' 10% until it is airdropped.
+/// Holds COWBOT's deposited profit until it is airdropped.
 #[account]
 pub struct Vault {}
 
@@ -398,11 +407,14 @@ pub struct Epoch {
     pub snapshot_slot: u64,
     pub created_at: i64,
     pub bump: u8,
+    /// Whose holders this airdrop pays ($COPYCOW or a launched coin).
+    pub token_mint: Pubkey,
+    pub kind: AirdropKind,
     /// bit i = 1 once holder i has been paid (prevents double payment)
     pub paid_bitmap: Vec<u8>,
 }
 impl Epoch {
-    pub const BASE_SIZE: usize = 8 + 32 + 8 + 8 + 4 + 4 + 8 + 8 + 1 + 4;
+    pub const BASE_SIZE: usize = 8 + 32 + 8 + 8 + 4 + 4 + 8 + 8 + 1 + 32 + 1 + 4;
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -412,22 +424,31 @@ pub struct Payout {
     pub proof: Vec<[u8; 32]>,
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq)]
-pub enum FeeSource {
-    CreatorFee,
-    CopytradeFee,
-}
-
 // ---------------------------------------------------------------------------
 // Events + errors
 // ---------------------------------------------------------------------------
 
 #[event]
-pub struct FeesDeposited {
+pub struct CreatorRewardsRouted {
     pub gross_lamports: u64,
-    pub to_holders: u64,
-    pub to_treasury: u64,
-    pub source: FeeSource,
+    pub to_agent: u64,
+    pub to_team: u64,
+}
+
+/// What an airdrop pays out.
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq)]
+pub enum AirdropKind {
+    /// COWBOT's trading + launch-sale profit → $COPYCOW holders (weekly).
+    CowbotProfit,
+    /// A launched coin's creator rewards → that coin's holders (daily).
+    LaunchedCoinRewards,
+}
+
+#[event]
+pub struct HolderFundsDeposited {
+    pub amount: u64,
+    pub kind: AirdropKind,
+    pub token_mint: Pubkey,
 }
 
 #[event]
@@ -437,6 +458,8 @@ pub struct EpochPublished {
     pub total_lamports: u64,
     pub holder_count: u32,
     pub snapshot_slot: u64,
+    pub token_mint: Pubkey,
+    pub kind: AirdropKind,
 }
 
 #[event]
@@ -457,8 +480,6 @@ pub enum DividendError {
     InvalidEpochLength,
     #[msg("Too many (or zero) holders for one epoch")]
     TooManyHolders,
-    #[msg("The current epoch is not over yet (weekly schedule)")]
-    EpochNotOver,
     #[msg("The vault does not hold enough unreserved SOL")]
     InsufficientVaultBalance,
     #[msg("Number of payouts and recipient accounts differ")]
@@ -484,14 +505,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn founder_rule_split_is_exactly_ten_percent() {
-        assert_eq!(HOLDER_FEE_BPS, 1000);
-        assert_eq!(TREASURY_FEE_BPS, 9000);
-        assert_eq!(split_fee(1_000_000_000).unwrap(), (100_000_000, 900_000_000));
+    fn founder_rule_cowbot_keeps_at_most_ten_percent() {
+        assert_eq!(AGENT_SHARE_BPS, 1000);
+        assert_eq!(TEAM_SHARE_BPS, 9000);
+        assert_eq!(split_creator_rewards(1_000_000_000).unwrap(), (100_000_000, 900_000_000));
         for gross in [1u64, 9, 10, 11, 999, 123_456_789, u64::MAX] {
-            let (h, t) = split_fee(gross).unwrap();
-            assert_eq!(h + t, gross);
-            assert!((h as u128) * 10 <= gross as u128, "holders must never exceed 10%");
+            let (agent, team) = split_creator_rewards(gross).unwrap();
+            assert_eq!(agent + team, gross);
+            assert!((agent as u128) * 10 <= gross as u128, "COWBOT must never keep more than 10%");
         }
     }
 }

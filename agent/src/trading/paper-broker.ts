@@ -115,5 +115,6 @@ export function markPrice(db: DB, tradeId: number, price: number): void {
   db.prepare("UPDATE trades SET last_price=?, last_price_ts=? WHERE id=?").run(price, nowIso(), tradeId);
 }
 
+/** COWBOT's open momentum trades (launch buys are managed separately). */
 export const openTrades = (db: DB): TradeRow[] =>
-  db.prepare("SELECT * FROM trades WHERE status='open' ORDER BY entry_ts").all() as TradeRow[];
+  db.prepare("SELECT * FROM trades WHERE status='open' AND kind='momentum' ORDER BY entry_ts").all() as TradeRow[];

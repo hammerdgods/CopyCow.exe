@@ -30,8 +30,12 @@ else
   node scripts/prepare-keys.mjs
 fi
 
+# Anchor calls mainnet "mainnet" (the Solana CLI calls it "mainnet-beta").
+ANCHOR_CLUSTER="$CLUSTER"
+[ "$CLUSTER" = "mainnet-beta" ] && ANCHOR_CLUSTER="mainnet"
+
 anchor build
-anchor deploy --provider.cluster "$CLUSTER" --provider.wallet "$WALLET"
+anchor deploy --provider.cluster "$ANCHOR_CLUSTER" --provider.wallet "$WALLET"
 echo
 echo "✅ Deployed. Program IDs:"
 anchor keys list

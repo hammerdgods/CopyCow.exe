@@ -2,11 +2,12 @@
  * One-time setup after deploying: creates each program's settings account.
  *   npm run init:programs -- --cluster devnet
  * Reads from the project's .env:
+ *   TEAM_WALLET                 (REQUIRED: receives 90% of all creator rewards — use a wallet the team controls)
  *   COPYCOW_MINT                (placeholder allowed until launch; tier contract can be updated later)
  *   TREASURY_DAILY_LIMIT_SOL    (default 2)
  *   LAUNCH_TOTAL_BUDGET_SOL     (default 5)
  * The agent wallet (data/wallet/cowbot-keypair.json) becomes:
- *   • the treasury that receives the 90%
+ *   • COWBOT in the money contract (keeps max 10% of creator rewards, deposits weekly profit)
  *   • the relayer/keeper that publishes weekly roots and pushes airdrops
  *   • the only key allowed to spend from the treasury program (within limits)
  * Your deploy wallet (~/.config/solana/id.json) becomes the ADMIN.
@@ -29,7 +30,7 @@ if (fs.existsSync(envFile)) {
   }
 }
 
-for (const k of ["COPYCOW_MINT", "AGENT_KEYPAIR_PATH", "TREASURY_DAILY_LIMIT_SOL", "LAUNCH_TOTAL_BUDGET_SOL"]) {
+for (const k of ["TEAM_WALLET", "COPYCOW_MINT", "AGENT_KEYPAIR_PATH", "TREASURY_DAILY_LIMIT_SOL", "LAUNCH_TOTAL_BUDGET_SOL"]) {
   const v = fromProcess(k);
   if (v) env[k] = v;
 }
@@ -45,6 +46,9 @@ async function main() {
   const agent = loadKp(agentPath).publicKey;
   // Placeholder mint until $COPYCOW exists (System Program id = "nothing yet").
   const mint = new PublicKey(env.COPYCOW_MINT || "11111111111111111111111111111111");
+  if (!env.TEAM_WALLET) throw new Error("Set TEAM_WALLET in .env first (the wallet that receives the team's 90%).");
+  const team = new PublicKey(env.TEAM_WALLET);
+  if (team.equals(agent)) throw new Error("TEAM_WALLET must be a different wallet from COWBOT's agent wallet.");
   const sol = (n: number) => new BN(Math.round(n * LAMPORTS_PER_SOL));
 
   const provider = new anchor.AnchorProvider(new Connection(url, "confirmed"), new anchor.Wallet(admin), { commitment: "confirmed" });
@@ -54,7 +58,7 @@ async function main() {
   const dividend = new Program(idl("dividend_airdrop"), provider);
   const treasury = new Program(idl("treasury"), provider);
 
-  console.log(`🐄 Initializing on ${clusterArg}\n   admin: ${admin.publicKey}\n   agent: ${agent}\n   mint:  ${mint}`);
+  console.log(`🐄 Initializing on ${clusterArg}\n   admin: ${admin.publicKey}\n   agent: ${agent}\n   team:  ${team}\n   mint:  ${mint}`);
 
   const run = async (label: string, fn: () => Promise<string>) => {
     try {
@@ -66,7 +70,9 @@ async function main() {
   };
   await run("tier_access", () => tier.methods.initialize(mint).accounts({ admin: admin.publicKey }).rpc());
   await run("dividend_airdrop", () =>
-    dividend.methods.initialize(agent, mint, new BN(7 * 24 * 3600)).accounts({ admin: admin.publicKey, treasury: agent }).rpc());
+    // 7 days: how long an airdrop stays open before unpaid leftovers can be released
+    // back to the pool. (WHEN airdrops run — weekly profit, daily coin rewards — is COWBOT's schedule.)
+    dividend.methods.initialize(agent, mint, new BN(7 * 24 * 3600)).accounts({ admin: admin.publicKey, agent, teamWallet: team }).rpc());
   await run("treasury", () =>
     treasury.methods
       .initialize(agent, sol(Number(env.TREASURY_DAILY_LIMIT_SOL || 2)), sol(Number(env.LAUNCH_TOTAL_BUDGET_SOL || 5)))

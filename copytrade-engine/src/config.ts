@@ -4,7 +4,7 @@ loadEnv();
 export const engineConfig = {
   port: envNum("ENGINE_PORT", 8787),
   pollSeconds: envNum("ENGINE_POLL_SECONDS", 10),
-  /** Performance fee on PROFITABLE copied trades, in basis points (500 = 5%). Goes through the 10/90 splitter. */
+  /** Performance fee on PROFITABLE copied trades, in basis points (500 = 5%). Goes 100% to the holder airdrop pool. */
   perfFeeBps: Math.min(2000, envNum("COPYTRADE_PERF_FEE_BPS", 500)),
   copycowMint: envStr("COPYCOW_MINT"),
   rpcUrl: envStr("SOLANA_RPC_URL") ||

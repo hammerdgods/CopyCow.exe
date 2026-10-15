@@ -1,24 +1,27 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Keypair } from "@solana/web3.js";
-import { openDb, recordFeeReceipt, pendingDividendLamports, MAX_LAUNCHES_PER_24H } from "@copycow/shared";
+import { openDb, recordCopycowReward, recordLaunchReward, owedToTeamLamports, MAX_LAUNCHES_PER_24H } from "@copycow/shared";
 import { config } from "../src/config";
 import { evaluateEntry, evaluateExit } from "../src/strategy/momentum";
 import type { PoolInfo } from "../src/market/geckoterminal";
-import { isTradeablePool } from "../src/market/universe";
-import { isMemeable, normalizeTerm, termsFromText } from "../src/trend-scanner/extract";
+import { duplicateTickers, isTradeablePool } from "../src/market/universe";
+import { isBlockedTerm, isMemeable, normalizeTerm, termsFromText } from "../src/trend-scanner/extract";
+import { believableVolumeUsd } from "../src/fees/tracker";
 import { aggregate, scoreTerm } from "../src/trend-scanner/score";
 import { xBudgetStatus } from "../src/trend-scanner/sources/x";
 import { makeTokenIdentity } from "../src/token-launcher/naming";
 import { checkLaunchSafety } from "../src/token-launcher/safety";
 import { planPayouts } from "../src/airdrop/epoch";
 import { dailyStats, recapPost } from "../src/recap/daily";
+import { manageLaunchPositions } from "../src/token-launcher/positions";
+import { airdropPreview } from "@copycow/shared";
 
 const pool = (over: Partial<PoolInfo> = {}): PoolInfo => ({
   mint: "M1", symbol: "MOO", quoteSymbol: "SOL", poolAddress: "P", dex: "raydium", priceUsd: 2,
   change: { m5: 0.3, m15: 2, m30: 3, h1: 4, h6: 5, h24: 6 },
   volume: { m5: 1, m15: 1, h1: 200_000, h6: 1, h24: 2_400_000 },
-  liquidityUsd: 1_000_000, fdvUsd: 10_000_000, buyers24h: 2000, txM15: { buys: 60, sells: 40 }, ...over,
+  liquidityUsd: 1_000_000, fdvUsd: 10_000_000, buyers24h: 2000, txM15: { buys: 60, sells: 40 }, poolAgeHours: 500, ...over,
 });
 const ctx = { heldMints: new Set<string>(), cooldownUntil: new Map<string, number>(), now: Date.now() };
 
@@ -57,6 +60,25 @@ test("pasture filter blocks scams and stables", () => {
   assert.equal(isTradeablePool(pool({ symbol: "USDC", priceUsd: 1 })).ok, false);
   assert.equal(isTradeablePool(pool({ buyers24h: 1 })).ok, false);
   assert.equal(isTradeablePool(pool()).ok, true);
+});
+
+test("pasture filter blocks fresh wash-traded relaunches", () => {
+  // e.g. ALLOX: 8h-old pool, $1.7M market cap, $51M daily volume
+  assert.equal(isTradeablePool(pool({ poolAgeHours: 8 })).ok, false);
+  assert.equal(isTradeablePool(pool({ fdvUsd: 1_700_000, volume: { m5: 1, m15: 1, h1: 2e6, h6: 1, h24: 51e6 } })).ok, false);
+  const dupes = duplicateTickers([pool({ mint: "A", symbol: "PULT" }), pool({ mint: "B", symbol: "PULT" }), pool({ mint: "C", symbol: "SOL" })]);
+  assert.deepEqual([...dupes], ["PULT"]);
+});
+
+test("bad-word filter blocks offensive trends but not innocent words", () => {
+  for (const w of ["rape", "r4pe", "hitlercat", "porncoin", "coon"]) assert.equal(isBlockedTerm(w), true, w);
+  for (const w of ["grape", "raccoon", "spicy", "method", "grasscat"]) assert.equal(isBlockedTerm(w), false, w);
+  assert.equal(isMemeable("rape"), false);
+});
+
+test("paper reward estimate ignores wash-traded volume", () => {
+  const pairs = [{ chainId: "solana", baseToken: { address: "x", symbol: "PULT", name: "Pult" }, volume: { h24: 50_000_000 }, liquidity: { usd: 348_000 }, marketCap: 1_700_000 }];
+  assert.equal(believableVolumeUsd(pairs, "pult"), 1_044_000); // capped at 3× liquidity, not $50M
 });
 
 test("trend term extraction + memeability", () => {
@@ -110,6 +132,15 @@ test("launch safety: wallet floor", async () => {
   assert.match((await checkLaunchSafety(db, "paper", "grasscat")).reason, /floor/);
 });
 
+test("airdrop: holders below the minimum payout are dropped and their share re-split", () => {
+  const w = () => Keypair.generate().publicKey.toBase58();
+  const plan = planPayouts([{ wallet: w(), tokens: 9_900_000 }, { wallet: w(), tokens: 100_000 }], 50_000_000n, {
+    minTokens: 100_000, minPayoutLamports: 1_000_000n, exclude: new Set(),
+  });
+  assert.equal(plan.length, 1);
+  assert.equal(plan[0].amountLamports, 50_000_000n); // the small holder's 0.0005 SOL went back into the pot
+});
+
 test("airdrop: pro-rata, min balance, excludes, never over the pool", () => {
   const w = () => Keypair.generate().publicKey.toBase58();
   const [a, b, c, lp] = [w(), w(), w(), w()];
@@ -126,10 +157,25 @@ test("airdrop: pro-rata, min balance, excludes, never over the pool", () => {
 
 test("daily recap format", () => {
   const db = openDb(":memory:");
-  recordFeeReceipt(db, { sourceType: "creator_fee", amountLamports: 1_000_000_000, simulated: true });
-  assert.equal(pendingDividendLamports(db), 100_000_000);
+  recordCopycowReward(db, { amountLamports: 1_000_000_000, simulated: true });
+  const lt = Number(db.prepare("INSERT INTO launched_tokens (trend_term,name,ticker,description,mode,status,launch_buy_sol,launched_at) VALUES ('moo','Moo','MOO','x','paper','paper_launched',0.5,?)").run(new Date().toISOString()).lastInsertRowid);
+  recordLaunchReward(db, { launchedTokenId: lt, amountLamports: 200_000_000, simulated: true });
+  assert.equal(owedToTeamLamports(db), 0); // simulated rewards never count as owed real SOL
   const post = recapPost(dailyStats(db, new Date().toISOString().slice(0, 10)));
   assert.match(post, /^🐄 COWBOT\.exe Daily Report — \d{4}-\d{2}-\d{2}/);
-  assert.match(post, /Creator fees earned: 1\.0000 SOL \(10% → holders: 0\.1000 SOL\)/);
+  assert.match(post, /\$COPYCOW creator rewards: 1\.0000 SOL \(10% → COWBOT: 0\.1000 \| 90% → team: 0\.9000\)/);
+  assert.match(post, /Launched-coin rewards → their holders: 0\.2000 SOL/);
+  assert.match(post, /Next \$COPYCOW airdrop \(all profit\): 0\.0000 SOL/);
   assert.match(post, /Open positions: 0 \| Status: /);
+});
+
+test("launch buy with no reference market closes flat after 24h; its P&L joins the $COPYCOW airdrop pool", async () => {
+  const db = openDb(":memory:");
+  db.prepare(`INSERT INTO trades (mint, symbol, kind, status, mode, size_sol, size_usd, entry_price, entry_ts)
+    VALUES ('paper:MOO', 'MOO', 'launch', 'open', 'paper', 0.5, 75, 1, ?)`).run(new Date(Date.now() - 25 * 3_600_000).toISOString());
+  await manageLaunchPositions(db);
+  const t = db.prepare("SELECT status, exit_reason, pnl_sol FROM trades").get() as { status: string; exit_reason: string; pnl_sol: number };
+  assert.deepEqual(t, { status: "closed", exit_reason: "launch_time_exit", pnl_sol: 0 });
+  db.prepare("UPDATE trades SET pnl_sol = 0.5").run(); // pretend it doubled
+  assert.equal(airdropPreview(db, "paper").launchPnlLamports, 500_000_000);
 });

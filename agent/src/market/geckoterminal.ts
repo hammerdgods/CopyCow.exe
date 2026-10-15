@@ -14,6 +14,7 @@ interface GtPool {
   attributes: {
     name: string;
     address: string;
+    pool_created_at?: string | null;
     base_token_price_usd: string | null;
     fdv_usd: string | null;
     market_cap_usd: string | null;
@@ -42,6 +43,8 @@ export interface PoolInfo {
   fdvUsd: number;
   buyers24h: number;
   txM15: { buys: number; sells: number };
+  /** Hours since this pool was created (Infinity if unknown). */
+  poolAgeHours: number;
 }
 
 const num = (v: string | null | undefined): number => {
@@ -78,6 +81,7 @@ function toPoolInfo(p: GtPool): PoolInfo {
     fdvUsd: num(a.fdv_usd ?? a.market_cap_usd),
     buyers24h: a.transactions?.h24?.buyers ?? 0,
     txM15: { buys: a.transactions?.m15?.buys ?? 0, sells: a.transactions?.m15?.sells ?? 0 },
+    poolAgeHours: a.pool_created_at ? (Date.now() - new Date(a.pool_created_at).getTime()) / 3_600_000 : Infinity,
   };
 }
 
@@ -124,6 +128,7 @@ export async function fetchTokenPools(mints: string[]): Promise<Map<string, Pool
           fdvUsd: 0,
           buyers24h: 0,
           txM15: { buys: 0, sells: 0 },
+          poolAgeHours: Infinity,
         });
       }
     }

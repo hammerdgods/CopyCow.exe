@@ -87,124 +87,24 @@
       ]
     },
     {
-      "name": "deposit_fees",
+      "name": "deposit_for_holders",
       "docs": [
-        "Anyone can pay fees in: 10% → holder vault, 90% → treasury. Split enforced here, on-chain."
+        "COWBOT deposits money that belongs to holders: its weekly profit (for",
+        "$COPYCOW holders) or a launched coin's creator rewards (for that coin's holders)."
       ],
       "discriminator": [
-        13,
-        215,
-        175,
-        72,
-        53,
-        21,
-        89,
-        5
-      ],
-      "accounts": [
-        {
-          "name": "depositor",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "distributor",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  100,
-                  105,
-                  115,
-                  116,
-                  114,
-                  105,
-                  98,
-                  117,
-                  116,
-                  111,
-                  114
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "vault",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  100,
-                  105,
-                  118,
-                  105,
-                  100,
-                  101,
-                  110,
-                  100,
-                  45,
-                  118,
-                  97,
-                  117,
-                  108,
-                  116
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "treasury",
-          "writable": true,
-          "relations": [
-            "distributor"
-          ]
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "gross_lamports",
-          "type": "u64"
-        },
-        {
-          "name": "source",
-          "type": {
-            "defined": {
-              "name": "FeeSource"
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "deposit_from_treasury",
-      "docs": [
-        "The treasury (agent wallet) reports fees it already received (e.g. a",
-        "pump.fun creator-fee claim) and sends EXACTLY 10% of them to the vault.",
-        "The 90% simply stays in the treasury wallet."
-      ],
-      "discriminator": [
-        38,
-        61,
-        10,
-        195,
-        118,
+        183,
         76,
-        181,
-        167
+        32,
+        6,
+        45,
+        239,
+        130,
+        168
       ],
       "accounts": [
         {
-          "name": "treasury",
+          "name": "agent",
           "writable": true,
           "signer": true,
           "relations": [
@@ -269,24 +169,30 @@
       ],
       "args": [
         {
-          "name": "gross_lamports",
+          "name": "amount",
           "type": "u64"
         },
         {
-          "name": "source",
+          "name": "kind",
           "type": {
             "defined": {
-              "name": "FeeSource"
+              "name": "AirdropKind"
             }
           }
+        },
+        {
+          "name": "token_mint",
+          "type": "pubkey"
         }
       ]
     },
     {
       "name": "distribute",
       "docs": [
-        "Weekly: the keeper publishes the Merkle root for this epoch's airdrop.",
-        "The snapshot slot is the \"checkpoint\" the holder balances were read at."
+        "The keeper publishes the Merkle root for one airdrop: `token_mint` is the",
+        "coin whose holders are paid, `kind` says what the money is. The snapshot",
+        "slot is the \"checkpoint\" the holder balances were read at. (Timing —",
+        "weekly profit, daily coin rewards — is COWBOT's schedule.)"
       ],
       "discriminator": [
         191,
@@ -387,13 +293,25 @@
         {
           "name": "snapshot_slot",
           "type": "u64"
+        },
+        {
+          "name": "token_mint",
+          "type": "pubkey"
+        },
+        {
+          "name": "kind",
+          "type": {
+            "defined": {
+              "name": "AirdropKind"
+            }
+          }
         }
       ]
     },
     {
       "name": "initialize",
       "docs": [
-        "One-time setup. `treasury` = where the 90% goes (the agent wallet)."
+        "One-time setup. `agent` = COWBOT's wallet, `team_wallet` = where 90% of creator rewards go."
       ],
       "discriminator": [
         175,
@@ -412,7 +330,10 @@
           "signer": true
         },
         {
-          "name": "treasury"
+          "name": "agent"
+        },
+        {
+          "name": "team_wallet"
         },
         {
           "name": "distributor",
@@ -601,6 +522,74 @@
       ]
     },
     {
+      "name": "route_creator_rewards",
+      "docs": [
+        "COWBOT reports creator rewards it just claimed from pump.fun. The",
+        "contract sends 90% to the team wallet right away; COWBOT keeps max 10%."
+      ],
+      "discriminator": [
+        27,
+        125,
+        230,
+        186,
+        203,
+        8,
+        214,
+        66
+      ],
+      "accounts": [
+        {
+          "name": "agent",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "distributor"
+          ]
+        },
+        {
+          "name": "distributor",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  115,
+                  116,
+                  114,
+                  105,
+                  98,
+                  117,
+                  116,
+                  111,
+                  114
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "team_wallet",
+          "writable": true,
+          "relations": [
+            "distributor"
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "gross_lamports",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "set_relayer",
       "discriminator": [
         23,
@@ -651,6 +640,61 @@
           "type": "pubkey"
         }
       ]
+    },
+    {
+      "name": "set_team_wallet",
+      "docs": [
+        "Only the ADMIN (founder) can change where the team's 90% goes. COWBOT can't."
+      ],
+      "discriminator": [
+        244,
+        107,
+        220,
+        100,
+        140,
+        183,
+        70,
+        61
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "distributor"
+          ]
+        },
+        {
+          "name": "distributor",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  115,
+                  116,
+                  114,
+                  105,
+                  98,
+                  117,
+                  116,
+                  111,
+                  114
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "new_team_wallet",
+          "type": "pubkey"
+        }
+      ]
     }
   ],
   "accounts": [
@@ -696,6 +740,19 @@
   ],
   "events": [
     {
+      "name": "CreatorRewardsRouted",
+      "discriminator": [
+        94,
+        29,
+        13,
+        157,
+        173,
+        123,
+        160,
+        48
+      ]
+    },
+    {
       "name": "EpochPublished",
       "discriminator": [
         221,
@@ -709,16 +766,16 @@
       ]
     },
     {
-      "name": "FeesDeposited",
+      "name": "HolderFundsDeposited",
       "discriminator": [
-        130,
-        131,
-        74,
-        238,
-        201,
-        54,
-        205,
-        192
+        235,
+        115,
+        124,
+        44,
+        223,
+        31,
+        97,
+        57
       ]
     },
     {
@@ -758,56 +815,88 @@
     },
     {
       "code": 6004,
-      "name": "EpochNotOver",
-      "msg": "The current epoch is not over yet (weekly schedule)"
-    },
-    {
-      "code": 6005,
       "name": "InsufficientVaultBalance",
       "msg": "The vault does not hold enough unreserved SOL"
     },
     {
-      "code": 6006,
+      "code": 6005,
       "name": "AccountsMismatch",
       "msg": "Number of payouts and recipient accounts differ"
     },
     {
-      "code": 6007,
+      "code": 6006,
       "name": "RecipientNotWritable",
       "msg": "Recipient account must be writable"
     },
     {
-      "code": 6008,
+      "code": 6007,
       "name": "InvalidIndex",
       "msg": "Leaf index out of range"
     },
     {
-      "code": 6009,
+      "code": 6008,
       "name": "AlreadyPaid",
       "msg": "This holder was already paid for this epoch"
     },
     {
-      "code": 6010,
+      "code": 6009,
       "name": "InvalidProof",
       "msg": "Merkle proof does not match the published root"
     },
     {
-      "code": 6011,
+      "code": 6010,
       "name": "PayoutBelowRent",
       "msg": "Payout to an empty wallet must cover the rent minimum"
     },
     {
-      "code": 6012,
+      "code": 6011,
       "name": "ExceedsEpochTotal",
       "msg": "Payouts would exceed the epoch total"
     },
     {
-      "code": 6013,
+      "code": 6012,
       "name": "EpochNotExpired",
       "msg": "Epoch has not expired yet"
     }
   ],
   "types": [
+    {
+      "name": "AirdropKind",
+      "docs": [
+        "What an airdrop pays out."
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "CowbotProfit"
+          },
+          {
+            "name": "LaunchedCoinRewards"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CreatorRewardsRouted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "gross_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "to_agent",
+            "type": "u64"
+          },
+          {
+            "name": "to_team",
+            "type": "u64"
+          }
+        ]
+      }
+    },
     {
       "name": "Distributor",
       "type": {
@@ -818,9 +907,16 @@
             "type": "pubkey"
           },
           {
-            "name": "treasury",
+            "name": "agent",
             "docs": [
-              "Where the 90% goes — the agent wallet."
+              "COWBOT's wallet: claims creator rewards, keeps max 10%, deposits weekly profit."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "team_wallet",
+            "docs": [
+              "Receives 90% of all creator rewards (marketing). Only the admin can change it."
             ],
             "type": "pubkey"
           },
@@ -855,15 +951,19 @@
             "type": "u64"
           },
           {
-            "name": "total_deposited_gross",
+            "name": "total_rewards_routed",
             "type": "u64"
           },
           {
-            "name": "total_to_holders",
+            "name": "total_to_team",
             "type": "u64"
           },
           {
-            "name": "total_to_treasury",
+            "name": "total_profit_deposited",
+            "type": "u64"
+          },
+          {
+            "name": "total_coin_rewards_deposited",
             "type": "u64"
           },
           {
@@ -928,6 +1028,21 @@
             "type": "u8"
           },
           {
+            "name": "token_mint",
+            "docs": [
+              "Whose holders this airdrop pays ($COPYCOW or a launched coin)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "kind",
+            "type": {
+              "defined": {
+                "name": "AirdropKind"
+              }
+            }
+          },
+          {
             "name": "paid_bitmap",
             "docs": [
               "bit i = 1 once holder i has been paid (prevents double payment)"
@@ -966,48 +1081,42 @@
           {
             "name": "snapshot_slot",
             "type": "u64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "FeeSource",
-      "type": {
-        "kind": "enum",
-        "variants": [
-          {
-            "name": "CreatorFee"
           },
           {
-            "name": "CopytradeFee"
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "kind",
+            "type": {
+              "defined": {
+                "name": "AirdropKind"
+              }
+            }
           }
         ]
       }
     },
     {
-      "name": "FeesDeposited",
+      "name": "HolderFundsDeposited",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "gross_lamports",
+            "name": "amount",
             "type": "u64"
           },
           {
-            "name": "to_holders",
-            "type": "u64"
-          },
-          {
-            "name": "to_treasury",
-            "type": "u64"
-          },
-          {
-            "name": "source",
+            "name": "kind",
             "type": {
               "defined": {
-                "name": "FeeSource"
+                "name": "AirdropKind"
               }
             }
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
           }
         ]
       }
@@ -1066,7 +1175,7 @@
     {
       "name": "Vault",
       "docs": [
-        "Holds the holders' 10% until it is airdropped."
+        "Holds COWBOT's deposited profit until it is airdropped."
       ],
       "type": {
         "kind": "struct",
@@ -1076,7 +1185,7 @@
   ],
   "constants": [
     {
-      "name": "HOLDER_FEE_BPS",
+      "name": "AGENT_SHARE_BPS",
       "type": "u64",
       "value": "1000"
     }

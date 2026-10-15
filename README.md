@@ -1,6 +1,12 @@
 # 🐄 copycow.exe — Copy the Smartest Cow in the Room
 
-**COWBOT** is a public AI trading agent on Solana. It watches the market every 5 minutes, trades only on momentum + volume (no FOMO, no revenge trades), and shows every trade on a public dashboard. It also scans X (Twitter) and Solana for trending memes, and can launch its own pump.fun token riding a trend. **10% of the creator fees from those launches are airdropped to $COPYCOW holders every week, automatically — nobody clicks "claim".**
+**COWBOT** is a public AI trading agent on Solana. It watches the market every 5 minutes, trades only on momentum + volume (no FOMO, no revenge trades), and shows every trade on a public dashboard. It also scans X (Twitter) and Solana for trending memes, and can launch its own pump.fun token riding a trend.
+
+**The money:**
+- **All of COWBOT's profit**, from trading and from selling its launch buys (at 2× or after 24h), is **airdropped to $COPYCOW holders every week** by holdings.
+- **Each coin COWBOT launches** sends **100% of its pump.fun creator rewards to that coin's holders, every day.**
+- **$COPYCOW's own creator rewards:** **10% to COWBOT** as trading capital (never more), **90% to the team wallet** for marketing, which COWBOT never touches.
+- Nobody ever clicks "claim": SOL is pushed straight into wallets.
 
 > **Everything is PAPER (simulated) by default.** No real money moves until you change `LAUNCH_MODE=paper` to `LAUNCH_MODE=real` in your `.env` file. Trading itself has **no real-money code at all** in this version — it is always paper.
 
@@ -10,21 +16,24 @@
 
 | Folder | What it is, in plain English |
 |---|---|
-| `agent/` | **COWBOT itself.** The program that runs 24/7: watches prices, makes paper trades, scans for trends, launches tokens (paper by default), tracks creator fees, splits them 10% / 90%, runs the weekly airdrop, and writes the daily report. |
+| `agent/` | **COWBOT itself.** The program that runs 24/7: watches prices, makes paper trades, scans for trends, launches tokens (paper by default), sells its launch buys, claims creator rewards (launched coins → their holders; $COPYCOW → 10% COWBOT / 90% team), runs the weekly profit airdrop and the daily coin airdrops, and writes the daily report. |
 | `agent/src/trend-scanner/` | The **trend radar**. Reads X (Twitter) + free Solana data (DexScreener, GeckoTerminal), spots names whose mentions suddenly spike, and scores them. |
 | `agent/src/token-launcher/` | The **token launcher**. Turns a hot trend into a token (name, ticker, image) and launches it on pump.fun — or, in paper mode, just writes down "would have launched". Safety rules are built in. |
 | `dashboard/` | The **public website** (copycow.xyz). Home, Live Trades, History, Performance charts, Launched Tokens, Airdrops, Proof Ledger, Tiers. |
 | `copytrade-engine/` | The **copy-trading service**. Holders register their wallet; when COWBOT trades, it lines everyone up by tier (bigger holders go first, with bigger sizes) and logs what it *would* execute. Paper only for now. |
-| `contracts/` | The **Solana smart contracts**: Tier Access (what your holdings unlock), Dividend Airdrop (the 10% weekly airdrop), Treasury (the 90% with daily spending limits). |
-| `shared/` | Code every part uses: the database, the **hard-coded 10% rule**, the tiers, and the proof hashing. |
+| `contracts/` | The **Solana smart contracts**: Tier Access (what your holdings unlock), Money contract (sends 90% of $COPYCOW creator rewards to the team wallet, lets COWBOT keep max 10%, and runs every holder airdrop), Treasury (optional vault for COWBOT's own capital, with daily spending limits). |
+| `shared/` | Code every part uses: the database, the **hard-coded 10% / 90% rule**, the tiers, and the proof hashing. |
 | `launch-kit/` | Ready-to-paste text: pump.fun description, X bio, 12-tweet launch thread, DexScreener + CoinGecko descriptions. |
 | `content/daily/` | Where COWBOT saves its **daily report** posts (one file per day). |
 | `data/` | Created when you run things. Holds the database (`copycow.db`) and **COWBOT's wallet key** (`data/wallet/`). Never shared or uploaded. |
 
 ### The money rules (hard-coded, not settings)
-- **Exactly 10%** of creator fees (and copytrade fees) go to holders; 90% stays in the treasury. Written as a constant in three places, each marked `FOUNDER RULE: max 10%, do not change`:
-  - `shared/src/constants.ts`
-  - `contracts/programs/dividend_airdrop/src/lib.rs` (`HOLDER_FEE_BPS = 1000`). The contract **refuses to compile** above 10%.
+- **$COPYCOW creator rewards: COWBOT keeps max 10%, the team gets 90%.** The split happens the moment rewards are claimed, and the 90% is sent straight to `TEAM_WALLET`. COWBOT never holds, spends or redirects it (the contract checks the team address, and only the admin can change it). Written as a constant marked `FOUNDER RULE` in:
+  - `shared/src/constants.ts` (`AGENT_SHARE_BPS = 1000`)
+  - `contracts/programs/dividend_airdrop/src/lib.rs` (`AGENT_SHARE_BPS = 1000`). The contract **refuses to compile** above 10%.
+- **Launched-coin creator rewards: 100% to that coin's holders**, airdropped daily.
+- **$COPYCOW holders get ALL of COWBOT's profit.** Every week, its realized profit since the last airdrop (trading + selling launch buys, plus copytrade fees) is airdropped. A losing week pays nothing; losses are made back before the next airdrop, so COWBOT's capital never shrinks.
+- COWBOT never spends money that belongs to others: the team's unsent share, coin-holder rewards and this week's profit are all subtracted from its spendable balance.
 - Max **1 token launch per 24 hours**, a **total launch budget** (default 5 SOL), and **no launches if the wallet drops below a floor** (default 2 SOL).
 - Airdrops are **pushed** to wallets. Holders never click claim.
 
@@ -49,7 +58,7 @@ npm run setup
 ```bash
 npm run agent
 ```
-Leave this window open. Stop it with `Ctrl + C`. It runs: trading every 5 min · trend scan every 30 min · fee check every 30 min · weekly airdrop Mondays 00:05 UTC · daily report 23:55 UTC.
+Leave this window open. Stop it with `Ctrl + C`. It runs: trading every 5 min · trend scan every 30 min · creator-reward claim every 30 min · launched-coin airdrops daily 00:20 UTC · $COPYCOW profit airdrop Mondays 00:05 UTC · daily report 23:55 UTC.
 
 ### Run the trend scanner on its own
 ```bash
@@ -80,11 +89,11 @@ API on http://localhost:8787 — `GET /signals`, `POST /subscribe`, `GET /queue`
 
 ### Other handy commands
 ```bash
-npm run status       # is COWBOT alive? open positions, win rate, dividend pool
+npm run status       # is COWBOT alive? open positions, win rate, next airdrop
 npm run wallet       # COWBOT's wallet address (safe to share) + balance
 npm run recap        # write today's daily report to content/daily/
-npm run fees         # check creator fees now + show the 10/90 totals
-npm run airdrop      # run the weekly airdrop now (paper unless LAUNCH_MODE=real)
+npm run fees         # check creator rewards now + show who gets what
+npm run airdrop      # PREVIEW the next airdrops (changes nothing); -- --run = $COPYCOW airdrop now, -- --run-coins = coin airdrops now
 npm run launch-kit   # regenerate the launch-kit texts (checks all character limits)
 npm test             # run all the JavaScript tests
 ```
@@ -104,7 +113,7 @@ cd contracts
 npm install
 npm test
 ```
-You should see **31 passing**: the 10% rule, the weekly airdrop pushing SOL into wallets, double-payment and forged-payout protection, tiers 0–4, and the treasury's daily / launch limits.
+You should see **33 passing**: the 10% / 90% split (and that COWBOT can't redirect the team's share), deposits for both kinds of airdrop, SOL pushed into wallets, double-payment and forged-payout protection, tiers 0–4, and the treasury's daily / launch limits.
 
 ### Deploy the contracts (once you have a Solana wallet with SOL)
 **Always do devnet (free test network) first:**
@@ -146,20 +155,24 @@ npm run init:programs -- --cluster mainnet-beta
 
 1. **☐ Paper-trade for 30 days.** `npm run agent` on a computer or small cloud server that stays on, plus `npm run dashboard`. Don't touch the strategy settings mid-test.
 2. **☐ Publish the results.** Share the dashboard (win rate, equity curve, drawdown, Proof Ledger) and the daily reports from `content/daily/`. Be honest: if the 30 days are bad, fix that before step 3.
-3. **☐ Launch $COPYCOW on pump.fun.** Use `launch-kit/pumpfun-description.txt`, post `launch-kit/tweets.md`, set your X bio from `launch-kit/x-bio.txt`. Put the token address in `.env` as `COPYCOW_MINT=`.
+3. **☐ Launch $COPYCOW on pump.fun — from COWBOT's wallet.** Import `data/wallet/cowbot-keypair.json` into a wallet app (e.g. Phantom → "Import private key") and create $COPYCOW with it, so $COPYCOW's creator rewards land in COWBOT's reward vault and follow the 10% / 90% rule automatically. Don't buy $COPYCOW with that wallet: COWBOT's own wallet never receives airdrops. (If the team launches it from another wallet, those rewards stay with that wallet and COWBOT never sees them.) Use `launch-kit/pumpfun-description.txt`, post `launch-kit/tweets.md`, set your X bio from `launch-kit/x-bio.txt`. Put the token address in `.env` as `COPYCOW_MINT=`.
 4. **☐ Migrate to Raydium / PumpSwap.** This happens on pump.fun when the bonding curve completes. Then submit `launch-kit/dexscreener-description.txt` and `coingecko-description.txt`. Add the pool/LP addresses to `AIRDROP_EXCLUDE_WALLETS` (pool vaults are also auto-skipped).
-5. **☐ Activate the dividend airdrop contract.** Get a free Helius key, then deploy to devnet → test → mainnet (section 2). Put `DIVIDEND_PROGRAM_ID` in `.env`. Run `npm run airdrop` once in paper mode and check the numbers.
-6. **☐ Enable real token launches.** Fund COWBOT's wallet (`npm run wallet` shows the address) with your launch budget + the floor (e.g. 5 + 2 SOL). Set `LAUNCH_MODE=real`, restart `npm run agent`, and watch the first launch closely.
-7. **☐ First weekly airdrop.** Monday 00:05 UTC it happens by itself. Check the Airdrops page: every payout links to Solscan. If anything was interrupted: `npm run airdrop -- --resume`.
+5. **☐ Set the team wallet and activate the money contract.** Put the team's wallet address in `.env` as `TEAM_WALLET=` (a wallet the team controls, ideally a multisig, NOT COWBOT's). Get a free Helius key, then deploy to devnet → test → mainnet (section 2). Put `DIVIDEND_PROGRAM_ID` in `.env`. Run `npm run airdrop` to preview the numbers (it changes nothing).
+6. **☐ Go real: launches, launch sales, reward claims and airdrops.** Fund COWBOT's wallet (`npm run wallet` shows the address) with your launch budget + the floor (e.g. 5 + 2 SOL). Set `LAUNCH_MODE=real`, restart `npm run agent`, and watch the first launch closely. From then on: COWBOT sells each launch buy at 2× or after 24h, claims creator rewards every 30 min (90% of $COPYCOW's → `TEAM_WALLET`), airdrops launched-coin rewards to their holders daily, and airdrops its real profit to $COPYCOW holders every Monday. Check the first of each on Solscan.
+7. **☐ Real trading profit — a later step.** Momentum trading is still paper-only, so its profit only appears in the *paper* airdrop record. Real $COPYCOW airdrops come from real launch-sale profit until real trading is built and switched on.
 
 ---
 
 ## 5. Honest notes (read before going real)
 
-- **Paper creator fees are estimates.** Paper-launched tokens don't exist, so their "fees" are estimated from the real 24h volume of the trend they rode × pump.fun's creator fee rate × a conservative capture share. They're labelled **simulated** everywhere.
+- **Paper creator rewards are estimates.** Paper-launched tokens don't exist, so their rewards are estimated from the real 24h volume of the trend they rode — capped at the token's market cap and 3× its liquidity so fake wash volume can't inflate it — × pump.fun's creator fee rate × a small capture share. They're labelled **simulated** everywhere.
+- **Real momentum trading isn't built yet.** COWBOT's momentum trades are paper (simulated against live prices). Real money flows today come from launches: selling launch buys and creator rewards. Real trading is a separate, careful step (it puts COWBOT's capital at risk), so `LAUNCH_MODE=real` doesn't switch it on.
+- **One reward vault, many coins.** pump.fun pays all of COWBOT's creator rewards into one vault, so each claim is split between $COPYCOW and the launched coins in proportion to each coin's (believable) 24h trading volume. It's a close estimate, not an exact per-coin figure.
+- **Paper-launched coins don't exist,** so their simulated rewards can't be airdropped to anyone; the dashboard shows them as "for coin holders". Their launch-buy profit is simulated by following the real trending token they copied.
 - **pump.fun has no official server-side launch SDK.** Real launches use the widely used PumpPortal "local transaction" API: it builds the transaction, and COWBOT **signs it locally** (your keys never leave your machine). Creator fees are claimed the same way. If pump.fun changes its system, this part may need an update.
 - **Copytrades are paper only.** The engine builds and logs the exact swap each subscriber would make, sized and ordered by tier, but never signs or sends anything. Real auto-execution needs a custody / delegation design (who signs for the subscriber?). That's a separate, careful decision.
-- **Copytrade fees use the same 10/90 split.** Your brief says copytrade fees go to holder dividends, and also that the same splitter applies to them. I followed the more specific rule: **10% to holders, 90% to treasury**, so holders never get more than 10% of anything. If you want 100% of copytrade fees to go to holders, that's a one-line change in `copytrade-engine/src/engine.ts`.
+- **Copytrade performance fees go 100% to $COPYCOW holders**, added to the weekly profit airdrop (as in the original brief).
+- **The team's 90% is never COWBOT's money.** If sending it ever fails, COWBOT retries every 30 minutes and leaves it out of its own balance, so it can't be spent on launches. With no `TEAM_WALLET` set, COWBOT doesn't claim rewards at all.
 - **"Anyone can call distribute()."** On Solana a contract can't list every holder by itself, so the weekly snapshot + Merkle tree is built off-chain by COWBOT (the keeper/relayer) and only the relayer may publish it. Otherwise anyone could publish a fake list. The contract still guarantees: no double payments, no payouts beyond the vault, and every payout must match the published list.
 - **Hosting copycow.xyz:** the dashboard reads the same database file as the agent, so host both on the same machine (any small VPS; run `npm run build -w dashboard` then `npm run start -w dashboard`). Platforms like Vercel can't see a local database file.
 - Nothing here is financial advice. Meme-token launches are speculative. Start small.

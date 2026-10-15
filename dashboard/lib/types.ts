@@ -16,9 +16,17 @@ export interface Summary {
   todayPnlSol: number;
   startingCapitalSol: number;
   openPositions: number;
-  dividendPoolSol: number;
-  totalFeesSol: number;
-  holdersTotalSol: number;
+  /** Next weekly $COPYCOW airdrop = ALL COWBOT profit (trading + launch sales) since the last paid airdrop + copytrade fees. */
+  airdropPoolSol: number;
+  /** Profit since the last paid airdrop (negative = must be made back first). */
+  airdropPeriodPnlSol: number;
+  launchPnlSol: number;
+  /** $COPYCOW creator rewards and their 10/90 split. */
+  creatorRewardsSol: number;
+  agentShareSol: number;
+  teamShareSol: number;
+  /** Creator rewards of launched coins (100% for those coins' holders). */
+  coinRewardsSol: number;
   tokensLaunched: number;
   airdroppedSol: number;
   nextAirdropAt: string;
@@ -27,6 +35,7 @@ export interface Summary {
 
 export interface Trade {
   id: number;
+  kind: "momentum" | "launch";
   mint: string;
   symbol: string;
   status: "open" | "closed";
@@ -72,8 +81,9 @@ export interface LaunchedToken {
   launched_at: string;
   trend_score: number | null;
   fees_lamports: number;
-  holder_lamports: number;
-  treasury_lamports: number;
+  airdropped_lamports: number;
+  launch_pnl_sol: number | null;
+  launch_status: string | null;
   simulated_fees: number;
 }
 
@@ -93,7 +103,10 @@ export interface Trend {
 
 export interface LaunchesData {
   tokens: LaunchedToken[];
-  totals: { feesSol: number; holdersSol: number; treasurySol: number; copytradeFeesSol: number };
+  totals: {
+    coinRewardsSol: number; coinRewardsAirdroppedSol: number; launchPnlSol: number;
+    copycowRewardsSol: number; agentSol: number; teamSol: number; teamSentSol: number; copytradeFeesSol: number;
+  };
   trends: Trend[];
   launchMode: string;
 }
@@ -101,12 +114,17 @@ export interface LaunchesData {
 export interface AirdropEpoch {
   id: number;
   epoch_index: number;
+  kind: "cowbot_profit" | "coin_rewards";
+  token_mint: string | null;
+  ticker: string | null;
   merkle_epoch: number | null;
   period_start: string | null;
   period_end: string;
   mode: string;
   status: string;
   pool_lamports: number;
+  trading_pnl_lamports: number;
+  copytrade_fees_lamports: number;
   total_lamports: number;
   wallets_paid: number;
   merkle_root: string | null;
@@ -118,6 +136,8 @@ export interface AirdropEpoch {
 export interface AirdropsData {
   epochs: AirdropEpoch[];
   pendingPoolSol: number;
+  periodPnlSol: number;
+  copytradeFeesSol: number;
   nextAirdropAt: string;
   totalAirdroppedSol: number;
   mintConfigured: boolean;

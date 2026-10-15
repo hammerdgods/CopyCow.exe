@@ -25,14 +25,31 @@ export function isTradeablePool(p: PoolInfo): { ok: boolean; why?: string } {
   if (p.liquidityUsd < config.minLiquidityUsd) return { ok: false, why: "liquidity too thin" };
   if (p.buyers24h < config.minUniqueBuyers24h) return { ok: false, why: "too few real buyers (wash trading?)" };
   if (p.priceUsd <= 0) return { ok: false, why: "no price" };
+  // Wash-trading / serial-rug filters: brand-new pools, tiny market caps, and
+  // tokens trading many times their own value per day are skipped.
+  if (p.poolAgeHours < config.minPoolAgeHours) return { ok: false, why: `pool only ${p.poolAgeHours.toFixed(0)}h old` };
+  if (p.fdvUsd < config.minMarketCapUsd) return { ok: false, why: "market cap too small" };
+  if (p.volume.h24 > p.fdvUsd * config.maxVolumeToMarketCap) return { ok: false, why: "volume far above market cap (wash trading?)" };
   return { ok: true };
+}
+
+/** Tickers used by more than one token = copycats / relaunches. Skip them all. */
+export function duplicateTickers(pools: PoolInfo[]): Set<string> {
+  const mints = new Map<string, Set<string>>();
+  for (const p of pools) {
+    const k = p.symbol.toUpperCase();
+    mints.set(k, (mints.get(k) ?? new Set()).add(p.mint));
+  }
+  return new Set([...mints].filter(([, m]) => m.size > 1).map(([k]) => k));
 }
 
 /** One entry per token (its busiest pool), top N by 24h volume. */
 export async function loadUniverse(): Promise<PoolInfo[]> {
-  const pools = await fetchTopPools(3);
+  const pools = await fetchTopPools(4);
+  const dupes = duplicateTickers(pools);
   const byMint = new Map<string, PoolInfo>();
   for (const p of pools) {
+    if (dupes.has(p.symbol.toUpperCase())) continue;
     if (!isTradeablePool(p).ok) continue;
     const existing = byMint.get(p.mint);
     if (!existing || p.volume.h24 > existing.volume.h24) byMint.set(p.mint, p);

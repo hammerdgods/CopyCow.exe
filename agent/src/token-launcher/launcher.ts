@@ -13,6 +13,7 @@ import { loadOrCreateWallet } from "../wallet/wallet";
 import { createTokenImage } from "./image";
 import { makeTokenIdentity } from "./naming";
 import { launchOnPumpFun } from "./pumpfun";
+import { openLaunchPosition } from "./positions";
 import { checkLaunchSafety, LAUNCH_OVERHEAD_SOL } from "./safety";
 
 export interface TrendForLaunch {
@@ -57,6 +58,7 @@ export async function launchFromTrend(db: DB, trend: TrendForLaunch): Promise<nu
     const id = Number(insert.run(trend.id, trend.term, identity.name, identity.ticker, identity.description, imagePath, "paper", "paper_launched", config.launchBuySol, proof.id, nowIso()).lastInsertRowid);
     spend.run(nowIso(), costLamports, `launch:${id}`, 1);
     db.prepare("UPDATE trends SET status='launched', status_reason='paper launch' WHERE id=?").run(trend.id);
+    await openLaunchPosition(db, { launchedTokenId: id, ticker: identity.ticker, term: trend.term, mode: "paper", proofId: proof.id, costSol: config.launchBuySol });
     say("launch", `PAPER: would have launched $${identity.ticker} riding trend "${trend.term}" (score ${trend.score}) with a ${config.launchBuySol} SOL dev buy. Nothing was sent on-chain.`);
     return id;
   }
@@ -67,7 +69,9 @@ export async function launchFromTrend(db: DB, trend: TrendForLaunch): Promise<nu
   try {
     const res = await launchOnPumpFun(agent, { ...identity, imagePath, buySol: config.launchBuySol });
     db.prepare("UPDATE launched_tokens SET status='launched', mint=?, tx_signature=?, metadata_uri=? WHERE id=?").run(res.mint, res.signature, res.metadataUri, id);
-    spend.run(nowIso(), costLamports, `launch:${id}`, 0);
+    spend.run(nowIso(), res.costLamports ? -res.costLamports : costLamports, `launch:${id}`, 0);
+    await openLaunchPosition(db, { launchedTokenId: id, ticker: identity.ticker, term: trend.term, mode: "real", proofId: proof.id,
+      mint: res.mint, costSol: (res.costLamports || -costLamports) / LAMPORTS_PER_SOL, tokens: res.tokens });
     db.prepare("UPDATE trends SET status='launched', status_reason='real launch' WHERE id=?").run(trend.id);
     say("launch", `🐄 Launched $${identity.ticker} — mint ${res.mint} · tx ${res.signature}`);
     return id;

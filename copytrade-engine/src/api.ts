@@ -29,10 +29,10 @@ export function createApp(db: DB) {
   app.get("/tiers", (_req, res) => res.json(TIERS));
 
   app.get("/signals", (_req, res) => {
-    const open = db.prepare("SELECT id, symbol, mint, size_sol, entry_price, entry_ts, last_price, last_price_ts, entry_reason FROM trades WHERE status='open' ORDER BY entry_ts DESC").all() as {
+    const open = db.prepare("SELECT id, symbol, mint, size_sol, entry_price, entry_ts, last_price, last_price_ts, entry_reason FROM trades WHERE status='open' AND kind='momentum' ORDER BY entry_ts DESC").all() as {
       entry_price: number; last_price: number | null;
     }[];
-    const recent = db.prepare("SELECT id, symbol, mint, entry_price, exit_price, entry_ts, exit_ts, exit_reason, pnl_pct FROM trades WHERE status='closed' ORDER BY exit_ts DESC LIMIT 20").all();
+    const recent = db.prepare("SELECT id, symbol, mint, entry_price, exit_price, entry_ts, exit_ts, exit_reason, pnl_pct FROM trades WHERE status='closed' AND kind='momentum' ORDER BY exit_ts DESC LIMIT 20").all();
     res.json({
       mode: "paper",
       open: open.map((o) => ({ ...o, unrealized_pct: o.last_price ? (o.last_price / o.entry_price - 1) * 100 : 0 })),

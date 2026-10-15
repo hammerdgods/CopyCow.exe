@@ -23,9 +23,14 @@ export default function AirdropsPage() {
   const { data } = usePoll<AirdropsData>("/api/airdrops", 30_000);
   return (
     <>
-      <PageHeader title="Airdrop History" kicker="weekly · automatic · no claim button" />
+      <PageHeader title="Airdrop History" kicker="weekly profit · daily coin rewards · no claim button" />
       <div className="mb-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
-        <Stat label="Pool for next airdrop" value={data ? data.pendingPoolSol.toFixed(5) : "—"} sub="SOL" valueClass="text-win" />
+        <Stat
+          label="Next airdrop"
+          value={data ? data.pendingPoolSol.toFixed(5) : "—"}
+          sub={data ? (data.periodPnlSol < 0 ? `profit ${data.periodPnlSol.toFixed(4)} SOL — made back first` : "SOL to $COPYCOW holders · all profit") : "SOL"}
+          valueClass="text-win"
+        />
         <Stat label="Next airdrop in" value={data ? <Countdown to={data.nextAirdropAt} /> : "—"} sub="Mondays 00:05 UTC" />
         <Stat label="Airdropped to date" value={data ? data.totalAirdroppedSol.toFixed(5) : "—"} sub="SOL" />
         <Stat label="Epochs" value={data?.epochs.length ?? "—"} sub={data && !data.mintConfigured ? "$COPYCOW not launched yet" : "weekly snapshots"} />
@@ -33,8 +38,10 @@ export default function AirdropsPage() {
 
       <Window title="HOW_IT_WORKS.TXT" icon="❔" className="mb-4">
         <ol className="list-decimal space-y-1 p-4 pl-8 text-xs text-muted-foreground">
-          <li>10% of every creator fee (and copytrade fee) lands in the dividend pool.</li>
-          <li>Every Monday COWBOT snapshots all $COPYCOW holders at a fixed Solana slot (the checkpoint).</li>
+          <li>Weekly → $COPYCOW holders: ALL of COWBOT&apos;s realized profit since the last airdrop — trading + selling its launch buys — plus copytrade fees.</li>
+          <li>A losing week pays nothing: losses are made back first, so COWBOT&apos;s capital never shrinks.</li>
+          <li>Daily → each launched coin&apos;s holders: 100% of that coin&apos;s pump.fun creator rewards.</li>
+          <li>For each airdrop COWBOT snapshots that coin&apos;s holders at a fixed Solana slot (the checkpoint).</li>
           <li>The pool is split pro-rata. A Merkle root of every (wallet, amount) is published on-chain.</li>
           <li>The relayer pushes SOL straight into each wallet in batches and pays the gas. You do nothing.</li>
         </ol>
@@ -45,6 +52,7 @@ export default function AirdropsPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Epoch</TableHead>
+              <TableHead>For</TableHead>
               <TableHead>Date</TableHead>
               <TableHead className="text-right">Distributed</TableHead>
               <TableHead className="text-right">Wallets paid</TableHead>
@@ -57,7 +65,7 @@ export default function AirdropsPage() {
           <TableBody>
             {(data?.epochs ?? []).length === 0 && (
               <TableRow>
-                <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">First airdrop runs next Monday 00:05 UTC.</TableCell>
+                <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">First $COPYCOW airdrop runs Monday 00:05 UTC; launched-coin airdrops run daily.</TableCell>
               </TableRow>
             )}
             {(data?.epochs ?? []).map((e) => {
@@ -66,6 +74,7 @@ export default function AirdropsPage() {
               return (
                 <TableRow key={e.id}>
                   <TableCell className="font-bold">#{e.epoch_index}</TableCell>
+                  <TableCell className="text-xs">{e.kind === "coin_rewards" ? `$${e.ticker ?? "coin"} holders · rewards` : "$COPYCOW holders · profit"}</TableCell>
                   <TableCell className="text-muted-foreground">{dt(e.period_end)}</TableCell>
                   <TableCell className="text-right text-win">{lamportsToSol(e.total_lamports).toFixed(5)} SOL</TableCell>
                   <TableCell className="text-right">{e.wallets_paid}</TableCell>

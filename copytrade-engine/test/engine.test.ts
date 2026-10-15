@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Keypair } from "@solana/web3.js";
-import { openDb, pendingDividendLamports } from "@copycow/shared";
+import { openDb, airdropPreview } from "@copycow/shared";
 import { buildQueue } from "../src/queue";
 import { processSignals } from "../src/engine";
 
@@ -21,7 +21,7 @@ test("queue: higher tier first, then bigger holders; non-copy tiers excluded", (
   assert.ok(q[0].delayMs < q[1].delayMs && q[1].delayMs < q[2].delayMs);
 });
 
-test("buy → sell copies, and the performance fee goes through the 10/90 split", () => {
+test("buy → sell copies, and the performance fee goes 100% to the holder airdrop pool", () => {
   const db = openDb(":memory:");
   const sub = (tier: string, bal: number) =>
     db.prepare("INSERT INTO subscribers (wallet, tier, token_balance, balance_verified, created_at, updated_at) VALUES (?, ?, ?, 0, ?, ?)").run(wallet(), tier, bal, t0, t0);
@@ -33,8 +33,8 @@ test("buy → sell copies, and the performance fee goes through the 10/90 split"
   assert.deepEqual(processSignals(db, () => {}), { buys: 0, sells: 0 }); // idempotent
   db.prepare("UPDATE trades SET status='closed', exit_price=1.03, exit_ts='2026-01-02T01:00:00.000Z', pnl_pct=3, pnl_sol=0.03").run();
   assert.deepEqual(processSignals(db, () => {}), { buys: 0, sells: 2 });
-  // MAD Cow copied 5 SOL, COW 1 SOL → profits 0.15 + 0.03 SOL; 5% fee = 0.009 SOL; 10% of that to holders
+  // MAD Cow copied 5 SOL, COW 1 SOL → profits 0.15 + 0.03 SOL; 5% fee = 0.009 SOL, all of it to holders
   const fees = db.prepare("SELECT SUM(amount_lamports) a FROM fee_receipts WHERE source_type='copytrade_fee'").get() as { a: number };
   assert.equal(fees.a, 9_000_000);
-  assert.equal(pendingDividendLamports(db), 900_000);
+  assert.equal(airdropPreview(db, "paper").copytradeFeesLamports, 9_000_000);
 });

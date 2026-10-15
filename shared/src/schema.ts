@@ -40,6 +40,10 @@ CREATE TABLE IF NOT EXISTS trades (
   mint TEXT NOT NULL,
   symbol TEXT NOT NULL,
   side TEXT NOT NULL DEFAULT 'long',
+  -- momentum = a normal COWBOT trade · launch = COWBOT's first buy of a coin it launched
+  kind TEXT NOT NULL DEFAULT 'momentum',
+  launched_token_id INTEGER,
+  size_tokens REAL,
   status TEXT NOT NULL CHECK (status IN ('open','closed')),
   mode TEXT NOT NULL DEFAULT 'paper',
   size_sol REAL NOT NULL,
@@ -147,15 +151,21 @@ CREATE TABLE IF NOT EXISTS launched_tokens (
   error TEXT
 );
 
--- Every fee that comes in, already split 10% holders / 90% treasury
+-- Money coming in.
+--  copycow_reward: $COPYCOW's creator rewards → 10% COWBOT (agent_lamports) / 90% team (team_lamports)
+--  launch_reward:  creator rewards of a coin COWBOT launched → 100% to THAT coin's holders (holder_lamports)
+--  copytrade_fee:  copytrade performance fees → $COPYCOW holders' weekly airdrop (holder_lamports)
 CREATE TABLE IF NOT EXISTS fee_receipts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  source_type TEXT NOT NULL CHECK (source_type IN ('creator_fee','copytrade_fee')),
+  source_type TEXT NOT NULL CHECK (source_type IN ('copycow_reward','launch_reward','copytrade_fee')),
   source_ref TEXT,
   launched_token_id INTEGER,
   amount_lamports INTEGER NOT NULL,
+  agent_lamports INTEGER NOT NULL,
+  team_lamports INTEGER NOT NULL,
   holder_lamports INTEGER NOT NULL,
-  treasury_lamports INTEGER NOT NULL,
+  team_status TEXT NOT NULL,
+  team_tx_signature TEXT,
   simulated INTEGER NOT NULL,
   tx_signature TEXT,
   note TEXT,
@@ -164,7 +174,7 @@ CREATE TABLE IF NOT EXISTS fee_receipts (
 );
 CREATE INDEX IF NOT EXISTS idx_fees_epoch ON fee_receipts(airdrop_epoch_id);
 
--- Treasury (the 90%) money in and out
+-- COWBOT's own capital (its 10% of $COPYCOW rewards, launch spending). Team money and holder money are never in here.
 CREATE TABLE IF NOT EXISTS treasury_ledger (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   ts TEXT NOT NULL,
@@ -178,12 +188,18 @@ CREATE TABLE IF NOT EXISTS treasury_ledger (
 CREATE TABLE IF NOT EXISTS airdrop_epochs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   epoch_index INTEGER NOT NULL,
+  -- cowbot_profit = weekly profit → $COPYCOW holders · coin_rewards = daily launched-coin rewards → that coin's holders
+  kind TEXT NOT NULL DEFAULT 'cowbot_profit',
+  token_mint TEXT,
+  launched_token_id INTEGER,
   merkle_epoch INTEGER,
   period_start TEXT,
   period_end TEXT NOT NULL,
   mode TEXT NOT NULL,
   status TEXT NOT NULL,
   pool_lamports INTEGER NOT NULL,
+  trading_pnl_lamports INTEGER NOT NULL DEFAULT 0,
+  copytrade_fees_lamports INTEGER NOT NULL DEFAULT 0,
   total_lamports INTEGER NOT NULL,
   wallets_paid INTEGER NOT NULL,
   merkle_root TEXT,

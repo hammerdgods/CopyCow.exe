@@ -1,45 +1,69 @@
 /**
- * CREATOR FEE TRACKER — runs every 30 minutes.
+ * CREATOR REWARD TRACKER — runs every 30 minutes.
  *
- * REAL mode: checks pump.fun's creator vault for COWBOT's wallet; if there's
- *   enough waiting, claims it into the agent wallet, records the exact SOL
- *   received, and splits it 10% holders / 90% treasury. (If the on-chain
- *   dividend contract is configured, the 10% is deposited there too.)
+ * pump.fun pays creator rewards for $COPYCOW and every coin COWBOT launches
+ * (all created from COWBOT's wallet, so they land in one reward vault).
+ *   • $COPYCOW's share:        10% → COWBOT (trading capital) · 90% → TEAM_WALLET
+ *   • each launched coin's share: 100% → that coin's holders (daily airdrop)
+ * One claim covers every coin, so the total is split per coin by each coin's
+ * (believable) 24h trading volume — creator rewards are a % of volume.
  *
- * PAPER mode: paper-launched tokens don't exist, so fees are ESTIMATED from
- *   the real trading volume of the trend they rode (DexScreener), times
- *   pump.fun's creator fee rate, times the share of that volume our token
- *   might plausibly have captured. Every estimate is labelled "simulated".
+ * REAL mode: check both reward vaults (pump.fun + PumpSwap). If enough is
+ *   waiting, claim it, record the exact SOL received, and IMMEDIATELY send the
+ *   team's 90% of the $COPYCOW share to TEAM_WALLET. Failed transfers are
+ *   retried every run; money owed to the team or to holders is never counted
+ *   as COWBOT's. $COPYCOW launched but no TEAM_WALLET set → no claims at all.
+ *
+ * PAPER mode: paper-launched tokens don't exist, so rewards are ESTIMATED from
+ *   the trend they rode — using a sanity-capped volume (wash-traded volume is
+ *   ignored) × pump.fun's creator fee rate × a small capture share. Labelled
+ *   "simulated" everywhere.
  */
-import { type DB, getMeta, LAMPORTS_PER_SOL, nowIso, recordFeeReceipt, setMeta } from "@copycow/shared";
+import {
+  type DB, getMeta, LAMPORTS_PER_SOL, markTeamShareSent, nowIso, recordCopycowReward, recordLaunchReward, setMeta,
+} from "@copycow/shared";
 import { config } from "../config";
 import { fetchJson } from "../http";
 import { say } from "../log";
 import { getSolUsd } from "../market/prices";
 import { claimCreatorFees, unclaimedCreatorFeesSol } from "../token-launcher/pumpfun";
 import { loadOrCreateWallet, walletBalanceSol } from "../wallet/wallet";
-import { depositToDividendContract } from "../airdrop/onchain";
+import { routeTeamShare } from "../airdrop/onchain";
 
 interface LaunchedRow {
-  id: number;
+  id: number | null;
   ticker: string;
   trend_term: string;
   mint: string | null;
   launched_at: string;
 }
 
-async function trendVolumeUsd24h(term: string): Promise<number> {
-  const res = await fetchJson<{ pairs?: { chainId: string; baseToken: { symbol: string; name: string }; volume?: { h24?: number } }[] }>(
-    `https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(term)}`,
-  );
-  const t = term.toLowerCase();
-  const matches = (res.pairs ?? []).filter(
-    (p) => p.chainId === "solana" && (p.baseToken.symbol.toLowerCase() === t || p.baseToken.name.toLowerCase().replace(/[^a-z0-9]/g, "") === t),
-  );
-  return Math.max(0, ...matches.map((p) => p.volume?.h24 ?? 0));
+interface DexPair {
+  chainId: string;
+  baseToken: { address: string; symbol: string; name: string };
+  volume?: { h24?: number };
+  liquidity?: { usd?: number };
+  fdv?: number;
+  marketCap?: number;
 }
 
-async function simulatePaperFees(db: DB): Promise<void> {
+/**
+ * Believable 24h volume for a trend: the busiest matching Solana pair, but
+ * capped at 1× its market cap and 3× its liquidity — fake wash volume
+ * (e.g. $50M/day on a $1.7M token) would otherwise wildly inflate estimates.
+ */
+export function believableVolumeUsd(pairs: DexPair[], term: string): number {
+  const t = term.toLowerCase();
+  const matches = pairs.filter(
+    (p) => p.chainId === "solana" && (p.baseToken.symbol.toLowerCase() === t || p.baseToken.name.toLowerCase().replace(/[^a-z0-9]/g, "") === t),
+  );
+  return Math.max(
+    0,
+    ...matches.map((p) => Math.min(p.volume?.h24 ?? 0, p.marketCap ?? p.fdv ?? 0, 3 * (p.liquidity?.usd ?? 0))),
+  );
+}
+
+async function simulatePaperRewards(db: DB): Promise<void> {
   const since = new Date(Date.now() - config.paperFeeSimDays * 86_400_000).toISOString();
   const tokens = db.prepare("SELECT id, ticker, trend_term, mint, launched_at FROM launched_tokens WHERE mode='paper' AND status='paper_launched' AND launched_at >= ?").all(since) as LaunchedRow[];
   if (tokens.length === 0) return;
@@ -51,34 +75,34 @@ async function simulatePaperFees(db: DB): Promise<void> {
     if (hours < 0.25) continue;
     let volUsd = 0;
     try {
-      volUsd = await trendVolumeUsd24h(t.trend_term);
+      const res = await fetchJson<{ pairs?: DexPair[] }>(`https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(t.trend_term)}`);
+      volUsd = believableVolumeUsd(res.pairs ?? [], t.trend_term);
     } catch {
       continue;
     }
     setMeta(db, key, nowIso());
-    const feeSol = (volUsd / solUsd) * (Math.min(hours, 24) / 24) * (config.creatorFeeBpsEstimate / 10_000) * (config.paperFeeCapturePct / 100);
-    const lamports = Math.floor(feeSol * LAMPORTS_PER_SOL);
+    const rewardSol = (volUsd / solUsd) * (Math.min(hours, 24) / 24) * (config.creatorFeeBpsEstimate / 10_000) * (config.paperFeeCapturePct / 100);
+    const lamports = Math.floor(rewardSol * LAMPORTS_PER_SOL);
     if (lamports <= 0) continue;
-    const r = recordFeeReceipt(db, {
-      sourceType: "creator_fee",
+    recordLaunchReward(db, {
       sourceRef: `$${t.ticker}`,
-      launchedTokenId: t.id,
+      launchedTokenId: t.id!,
       amountLamports: lamports,
       simulated: true,
-      note: `simulated: trend vol $${Math.round(volUsd).toLocaleString()}/24h × ${config.creatorFeeBpsEstimate}bps × ${config.paperFeeCapturePct}% capture`,
+      note: `simulated: capped trend vol $${Math.round(volUsd).toLocaleString()}/24h × ${config.creatorFeeBpsEstimate}bps × ${config.paperFeeCapturePct}% capture`,
     });
-    say("fee", `Chewing cud: +${(lamports / LAMPORTS_PER_SOL).toFixed(5)} SOL simulated creator fees from $${t.ticker} (10% → holders: ${(r.holders / LAMPORTS_PER_SOL).toFixed(5)} SOL)`);
+    say("fee", `Chewing cud: +${(lamports / LAMPORTS_PER_SOL).toFixed(5)} SOL simulated creator rewards from $${t.ticker} → all for $${t.ticker} holders`);
   }
 }
 
-/** Splits a pooled claim across our live tokens by their 24h volume (estimate). */
+/** Splits a pooled claim across our tokens by their (believable) 24h volume. */
 async function attribute(tokens: LaunchedRow[], lamports: number): Promise<{ token: LaunchedRow; lamports: number }[]> {
   if (tokens.length === 1) return [{ token: tokens[0], lamports }];
   let weights = tokens.map(() => 1);
   try {
     const mints = tokens.map((t) => t.mint).filter(Boolean).join(",");
-    const pairs = await fetchJson<{ baseToken: { address: string }; volume?: { h24?: number } }[]>(`https://api.dexscreener.com/tokens/v1/solana/${mints}`);
-    weights = tokens.map((t) => Math.max(0, ...pairs.filter((p) => p.baseToken.address === t.mint).map((p) => p.volume?.h24 ?? 0)));
+    const pairs = await fetchJson<DexPair[]>(`https://api.dexscreener.com/tokens/v1/solana/${mints}`);
+    weights = tokens.map((t) => Math.max(0, ...pairs.filter((p) => p.baseToken.address === t.mint).map((p) => Math.min(p.volume?.h24 ?? 0, p.marketCap ?? p.fdv ?? 0))));
     if (weights.every((w) => w === 0)) weights = tokens.map(() => 1);
   } catch {
     /* even split */
@@ -92,32 +116,67 @@ async function attribute(tokens: LaunchedRow[], lamports: number): Promise<{ tok
   });
 }
 
-async function claimRealFees(db: DB): Promise<void> {
+/** Sends any team share still sitting in COWBOT's wallet. Safe to call every run. */
+export async function sendPendingTeamShares(db: DB): Promise<void> {
+  const rows = db.prepare("SELECT id, amount_lamports, team_lamports FROM fee_receipts WHERE team_status='pending' ORDER BY id").all() as {
+    id: number; amount_lamports: number; team_lamports: number;
+  }[];
+  if (rows.length === 0) return;
+  if (!config.teamWallet) {
+    say("warn", "TODO: set TEAM_WALLET in .env — the team's 90% is waiting in COWBOT's wallet (it will NOT be spent).");
+    return;
+  }
+  const gross = rows.reduce((s, r) => s + r.amount_lamports, 0);
+  const team = rows.reduce((s, r) => s + r.team_lamports, 0);
+  try {
+    const sig = await routeTeamShare(db, gross, team);
+    markTeamShareSent(db, rows.map((r) => r.id), sig);
+    say("fee", `Sent the team's 90% (${(team / LAMPORTS_PER_SOL).toFixed(5)} SOL) to the team wallet · tx ${sig}`);
+  } catch (e) {
+    say("error", `Couldn't send the team's share yet (${(e as Error).message.slice(0, 140)}). Will retry in 30 min; it stays untouched.`);
+  }
+}
+
+async function claimRealRewards(db: DB): Promise<void> {
+  if (config.copycowMint && !config.teamWallet) {
+    say("warn", "TODO: set TEAM_WALLET in .env. COWBOT won't claim creator rewards until it knows where the team's 90% of $COPYCOW rewards goes.");
+    return;
+  }
   const tokens = db.prepare("SELECT id, ticker, trend_term, mint, launched_at FROM launched_tokens WHERE mode='real' AND status='launched' AND mint IS NOT NULL").all() as LaunchedRow[];
+  // $COPYCOW itself (launched from COWBOT's wallet) shares the same reward vault.
+  if (config.copycowMint) tokens.push({ id: null, ticker: "COPYCOW", trend_term: "copycow", mint: config.copycowMint, launched_at: "" });
   if (tokens.length === 0) return;
   const agent = loadOrCreateWallet(db).keypair;
   const pending = await unclaimedCreatorFeesSol(agent.publicKey);
-  setMeta(db, "unclaimed_creator_fees_sol", pending);
-  if (pending < config.creatorFeeClaimMinSol) return;
+  setMeta(db, "unclaimed_creator_fees_sol", pending.total);
+  if (pending.total < config.creatorFeeClaimMinSol) return;
   const { signature, receivedLamports } = await claimCreatorFees(agent);
   if (receivedLamports <= 0) return;
-  let holdersTotal = 0;
+  const note = tokens.length > 1 ? "pooled claim, split by 24h volume" : null;
+  const parts: string[] = [];
   for (const { token, lamports } of await attribute(tokens, receivedLamports)) {
     if (lamports <= 0) continue;
-    const r = recordFeeReceipt(db, { sourceType: "creator_fee", sourceRef: `$${token.ticker}`, launchedTokenId: token.id, amountLamports: lamports, simulated: false, txSignature: signature,
-      note: tokens.length > 1 ? "pooled claim, attributed by 24h volume" : null });
-    holdersTotal += r.holders;
+    if (token.id === null) {
+      const r = recordCopycowReward(db, { sourceRef: "$COPYCOW", amountLamports: lamports, simulated: false, txSignature: signature, note });
+      parts.push(`$COPYCOW ${(lamports / LAMPORTS_PER_SOL).toFixed(5)} (COWBOT ${(r.agent / LAMPORTS_PER_SOL).toFixed(5)} / team ${(r.team / LAMPORTS_PER_SOL).toFixed(5)})`);
+    } else {
+      recordLaunchReward(db, { sourceRef: `$${token.ticker}`, launchedTokenId: token.id, amountLamports: lamports, simulated: false, txSignature: signature, note });
+      parts.push(`$${token.ticker} ${(lamports / LAMPORTS_PER_SOL).toFixed(5)} (→ $${token.ticker} holders)`);
+    }
   }
-  say("fee", `Claimed ${(receivedLamports / LAMPORTS_PER_SOL).toFixed(5)} SOL creator fees (tx ${signature}). 10% → holders: ${(holdersTotal / LAMPORTS_PER_SOL).toFixed(5)} SOL`);
-  await depositToDividendContract(db, receivedLamports, signature);
+  say("fee", `Claimed ${(receivedLamports / LAMPORTS_PER_SOL).toFixed(5)} SOL creator rewards (tx ${signature}): ${parts.join(" · ")}`);
 }
 
 export async function pollFees(db: DB): Promise<void> {
   try {
-    if (config.launchMode === "real") await claimRealFees(db);
-    await simulatePaperFees(db);
+    if (config.launchMode === "real") {
+      await sendPendingTeamShares(db); // retry anything that failed earlier
+      await claimRealRewards(db);
+      await sendPendingTeamShares(db); // send the new 90% straight away
+    }
+    await simulatePaperRewards(db);
   } catch (e) {
-    say("warn", `Fee check hiccup: ${(e as Error).message}`);
+    say("warn", `Reward check hiccup: ${(e as Error).message}`);
   }
   // Keep the dashboard's wallet balance fresh (real on-chain balance).
   try {

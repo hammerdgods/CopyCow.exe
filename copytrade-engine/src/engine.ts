@@ -5,7 +5,7 @@
  *    and charge the performance fee on profits → 10/90 splitter
  * PAPER MODE ONLY: instructions are built and logged, never signed or sent.
  */
-import { type DB, LAMPORTS_PER_SOL, nowIso, recordFeeReceipt, SOL_MINT, USDC_MINT } from "@copycow/shared";
+import { type DB, LAMPORTS_PER_SOL, nowIso, recordCopytradeFee, SOL_MINT, USDC_MINT } from "@copycow/shared";
 import { engineConfig } from "./config";
 import { buildQueue, type QueueSubscriber } from "./queue";
 
@@ -45,7 +45,7 @@ export function processSignals(db: DB, log: (msg: string) => void = console.log)
   let sells = 0;
 
   // New BUY signals: open trades that started after the subscriber joined (no copying stale entries).
-  const opens = db.prepare("SELECT * FROM trades WHERE status='open' ORDER BY entry_ts").all() as TradeRow[];
+  const opens = db.prepare("SELECT * FROM trades WHERE status='open' AND kind='momentum' ORDER BY entry_ts").all() as TradeRow[];
   for (const t of opens) {
     const queue = buildQueue(subs.filter((s) => s.created_at <= t.entry_ts));
     for (const slot of queue) {
@@ -74,8 +74,7 @@ export function processSignals(db: DB, log: (msg: string) => void = console.log)
       insert.run(p.trade_id, p.subscriber_id, "sell", p.tier, p.queue_position, p.delay_ms, p.size_sol,
         JSON.stringify(buildInstruction(trade, "sell", p.wallet, p.size_sol)), pnlSol, feeLamports, nowIso());
       if (feeLamports > 0) {
-        recordFeeReceipt(db, {
-          sourceType: "copytrade_fee",
+        recordCopytradeFee(db, {
           sourceRef: `trade:${p.trade_id}/sub:${p.subscriber_id}`,
           amountLamports: feeLamports,
           simulated: true,
@@ -84,7 +83,7 @@ export function processSignals(db: DB, log: (msg: string) => void = console.log)
       }
     })();
     sells++;
-    log(`📋 PAPER copy SELL ${p.wallet.slice(0, 6)}… ${p.symbol}: ${pnlSol >= 0 ? "+" : ""}${pnlSol.toFixed(5)} SOL${feeLamports ? ` · fee ${(feeLamports / LAMPORTS_PER_SOL).toFixed(6)} SOL (10% → holders)` : ""}`);
+    log(`📋 PAPER copy SELL ${p.wallet.slice(0, 6)}… ${p.symbol}: ${pnlSol >= 0 ? "+" : ""}${pnlSol.toFixed(5)} SOL${feeLamports ? ` · fee ${(feeLamports / LAMPORTS_PER_SOL).toFixed(6)} SOL (→ holder airdrop)` : ""}`);
   }
   return { buys, sells };
 }

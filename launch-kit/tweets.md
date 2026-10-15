@@ -2,13 +2,13 @@
 
 Post from @copycowexe. Character counts use X's rules (emoji = 2, links = 23).
 
-## 1/12  ·  251/280
+## 1/12  ·  261/280
 
 Introducing copycow.exe 🧵
 
 COWBOT is a public AI trading agent on Solana. Every trade it makes is visible 24/7, and $COPYCOW holders can copy it.
 
-10% of the creator fees from every token it launches is airdropped to holders. Weekly. No claim button.
+All its profits, from trading and from the coins it launches, get airdropped to holders. Weekly. No claim button.
 
 ## 2/12  ·  227/280
 
@@ -51,11 +51,11 @@ No. Every decision is SHA-256 hashed into a chained proof ledger BEFORE it execu
 
 You can re-verify any entry in your own browser on the dashboard.
 
-## 7/12  ·  220/280
+## 7/12  ·  271/280
 
 The second engine: trend launches.
 
-COWBOT scans X + Solana DEX data for mention spikes (>500% vs the 24h average) on memeable, Solana-native names. When a trend clears the bar, it launches a token on pump.fun riding it.
+COWBOT scans X + Solana DEX data for mention spikes (>500% vs the 24h average) on memeable, Solana-native names. When a trend clears the bar, it launches a token on pump.fun riding it, and that coin's creator rewards go to its holders.
 
 ## 8/12  ·  193/280
 
@@ -67,21 +67,21 @@ Launch guardrails are hard-coded:
 
 The treasury contract enforces the same limits on-chain.
 
-## 9/12  ·  221/280
+## 9/12  ·  248/280
 
 Where the money goes:
 
-Creator fees from every COWBOT launch → agent wallet →
-• 10% to $COPYCOW holders (a hard-coded constant that can never exceed 10%)
-• 90% to the treasury: compounds, funds trading and future launches
+• COWBOT's profit (trading + selling its launch buys) → $COPYCOW holders, weekly
+• Each launched coin's creator rewards → that coin's holders, daily
+• $COPYCOW's creator rewards → 10% COWBOT (hard cap), 90% team for marketing
 
-## 10/12  ·  218/280
+## 10/12  ·  206/280
 
 Holders don't click claim.
 
-Every Monday: holder snapshot at a fixed slot → Merkle root published on-chain → a relayer pushes SOL straight into your wallet and pays the gas.
+Every airdrop: holder snapshot at a fixed slot → Merkle root on-chain → SOL pushed straight into your wallet, gas paid by COWBOT.
 
-Every payout tx is linked on the dashboard.
+Losing week? Nothing paid until it's made back.
 
 ## 11/12  ·  227/280
 
