@@ -43,7 +43,7 @@ export function duplicateTickers(pools: PoolInfo[]): Set<string> {
   return new Set([...mints].filter(([, m]) => m.size > 1).map(([k]) => k));
 }
 
-/** One entry per token (its busiest pool), top N by 24h volume. */
+/** One entry per token (its busiest pool), sorted by 24h volume (all that pass the filters). */
 export async function loadUniverse(): Promise<PoolInfo[]> {
   const pools = await fetchTopPools(4);
   const dupes = duplicateTickers(pools);
@@ -54,5 +54,5 @@ export async function loadUniverse(): Promise<PoolInfo[]> {
     const existing = byMint.get(p.mint);
     if (!existing || p.volume.h24 > existing.volume.h24) byMint.set(p.mint, p);
   }
-  return [...byMint.values()].sort((a, b) => b.volume.h24 - a.volume.h24).slice(0, config.universeSize);
+  return [...byMint.values()].sort((a, b) => b.volume.h24 - a.volume.h24);
 }

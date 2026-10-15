@@ -42,6 +42,15 @@ export const config = {
   minPoolAgeHours: envNum("MIN_POOL_AGE_HOURS", 72),
   minMarketCapUsd: envNum("MIN_MARKET_CAP_USD", 5_000_000),
   maxVolumeToMarketCap: envNum("MAX_VOLUME_TO_MARKET_CAP", 3),
+  // Rug checks (see src/market/rugcheck.ts)
+  rugCheckEnabled: envBool("RUG_CHECK_ENABLED", true),
+  /** Block tokens whose creator can still mint more (normal for bridged coins → allowlist them). */
+  rugBlockMintAuthority: envBool("RUG_BLOCK_MINT_AUTHORITY", true),
+  /** Block if RugCheck's overall risk score (0 safe … 100 risky) is at least this. */
+  rugMaxRiskScore: envNum("RUG_MAX_RISK_SCORE", 75),
+  /** Token addresses you trust despite mint authority (e.g. bridged HYPE/ZEC), comma-separated. */
+  rugAllowlist: envStr("RUG_ALLOWLIST").split(",").map((s) => s.trim()).filter(Boolean),
+  rugCheckCacheHours: envNum("RUG_CHECK_CACHE_HOURS", 6),
   paperSlippageBps: envNum("PAPER_SLIPPAGE_BPS", 30),
   paperStartingCapitalSol: envNum("PAPER_STARTING_CAPITAL_SOL", 100),
 

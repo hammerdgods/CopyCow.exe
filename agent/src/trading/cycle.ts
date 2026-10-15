@@ -9,6 +9,7 @@ import { type DB, nowIso, setMeta, getMeta, SOL_MINT } from "@copycow/shared";
 import { config } from "../config";
 import { fmtPct, fmtSol, fmtUsd, say } from "../log";
 import { loadUniverse } from "../market/universe";
+import { rugScreen } from "../market/rugcheck";
 import type { PoolInfo } from "../market/geckoterminal";
 import { getPrices } from "../market/prices";
 import { evaluateEntry, evaluateExit } from "../strategy/momentum";
@@ -52,7 +53,9 @@ export async function runTradingCycle(db: DB): Promise<void> {
   // 1) Pasture
   let universe: PoolInfo[] = [];
   try {
-    universe = await loadUniverse();
+    // Rug-check a few extra candidates so blocked tokens don't shrink the pasture.
+    const candidates = (await loadUniverse()).slice(0, config.universeSize + 5);
+    universe = (await rugScreen(db, candidates)).slice(0, config.universeSize);
     setMeta(db, "universe", JSON.stringify(universe.map((p) => ({ mint: p.mint, symbol: p.symbol, m15: p.change.m15, vol24h: p.volume.h24 }))));
   } catch (e) {
     say("warn", `Couldn't reach the pasture (GeckoTerminal): ${(e as Error).message}. Managing open positions only.`);

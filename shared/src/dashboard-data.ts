@@ -10,7 +10,7 @@ import { HEARTBEAT_STALE_MINUTES, LAMPORTS_PER_SOL } from "./constants";
 import { equityCurve, maxDrawdown, monthlyReturns, rollingWinRate, winRate } from "./stats";
 import { verifyProofChain, type ProofEntry } from "./proof";
 import { airdropPreview } from "./split";
-import type { AirdropsData, LaunchesData, LogRow, Performance, ProofData, Summary, Trade } from "./dashboard-types";
+import type { AirdropsData, LaunchesData, LogRow, Performance, ProofData, RugCheckEntry, Summary, Trade } from "./dashboard-types";
 
 const L = LAMPORTS_PER_SOL;
 /** Which airdrop record to headline: real once COWBOT launches for real, otherwise the paper record. */
@@ -173,6 +173,12 @@ export function getLogs(d: DB, limit = 40): LogRow[] {
   return d.prepare("SELECT * FROM agent_log ORDER BY id DESC LIMIT ?").all(limit) as LogRow[];
 }
 
+/** Latest rug check of every token COWBOT considered (blocked first). */
+export function getRugChecks(d: DB): RugCheckEntry[] {
+  const rows = d.prepare("SELECT * FROM rug_checks ORDER BY verdict = 'pass', checked_at DESC LIMIT 60").all() as (Omit<RugCheckEntry, "blocks" | "warnings"> & { blocks: string; warnings: string })[];
+  return rows.map((r) => ({ ...r, blocks: JSON.parse(r.blocks) as string[], warnings: JSON.parse(r.warnings) as string[] }));
+}
+
 /** Is COWBOT alive, judged from its last heartbeat (works on a stored copy too). */
 export function isLive(heartbeat: string | null, agentStatus: string | null, now = Date.now()): boolean {
   return !!heartbeat && agentStatus === "live" && now - new Date(heartbeat).getTime() < HEARTBEAT_STALE_MINUTES * 60_000;
@@ -192,5 +198,6 @@ export function buildDashboardSnapshot(d: DB): Record<string, unknown> {
     airdrops: getAirdrops(d),
     proof: getProof(d, SNAPSHOT_PROOF_ENTRIES, 0),
     logs: getLogs(d, 40),
+    rugchecks: getRugChecks(d),
   };
 }

@@ -34,6 +34,7 @@
 - **Launched-coin creator rewards: 100% to that coin's holders**, airdropped daily.
 - **$COPYCOW holders get ALL of COWBOT's profit.** Every week, its realized profit since the last airdrop (trading + selling launch buys, plus copytrade fees) is airdropped. A losing week pays nothing; losses are made back before the next airdrop, so COWBOT's capital never shrinks.
 - COWBOT never spends money that belongs to others: the team's unsent share, coin-holder rewards and this week's profit are all subtracted from its spendable balance.
+- **Rug checks before every trade.** COWBOT reads each token's settings on Solana and asks RugCheck.xyz. It won't trade a token whose creator can freeze wallets, take tokens out of wallets, pause transfers or mint more, or that RugCheck rates 75+/100 risky. "A few wallets hold most of the supply" and "liquidity not locked" are shown as warnings, because on big tokens those are usually exchanges and pools. Results are on the Live Trades page. Bridged coins (like HYPE, ZEC) can still be minted by their bridge; add them to `RUG_ALLOWLIST` if you want COWBOT to trade them.
 - Max **1 token launch per 24 hours**, a **total launch budget** (default 5 SOL), and **no launches if the wallet drops below a floor** (default 2 SOL).
 - Airdrops are **pushed** to wallets. Holders never click claim.
 

@@ -11,6 +11,17 @@ CREATE TABLE IF NOT EXISTS agent_meta (
   updated_at TEXT NOT NULL
 );
 
+-- Rug checks on every token COWBOT considers trading (cached ~6h)
+CREATE TABLE IF NOT EXISTS rug_checks (
+  mint TEXT PRIMARY KEY,
+  symbol TEXT NOT NULL,
+  verdict TEXT NOT NULL CHECK (verdict IN ('pass','blocked')),
+  blocks TEXT NOT NULL,
+  warnings TEXT NOT NULL,
+  rugcheck_score REAL,
+  checked_at TEXT NOT NULL
+);
+
 -- COWBOT's diary (shown as the terminal feed on the dashboard)
 CREATE TABLE IF NOT EXISTS agent_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

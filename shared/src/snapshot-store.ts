@@ -13,7 +13,7 @@
  */
 import { createClient, type Client } from "@libsql/client";
 
-export const SNAPSHOT_KEYS = ["summary", "positions", "trades", "performance", "launches", "airdrops", "proof", "logs"] as const;
+export const SNAPSHOT_KEYS = ["summary", "positions", "trades", "performance", "launches", "airdrops", "proof", "logs", "rugchecks"] as const;
 export type SnapshotKey = (typeof SNAPSHOT_KEYS)[number];
 
 export function snapshotStoreConfigured(): boolean {

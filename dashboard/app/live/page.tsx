@@ -1,6 +1,7 @@
 "use client";
 import { PageHeader } from "@/components/page-header";
 import { Window } from "@/components/window";
+import { RugChecks } from "@/components/rug-checks";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { usePoll } from "@/lib/use-poll";
@@ -62,6 +63,7 @@ export default function LivePage() {
           Trades: take-profit +3% · stop-loss −1.5% · max hold 4h. Launch buys: sold at 2× or after 24h. Profits from both → weekly $COPYCOW airdrop.
         </p>
       </Window>
+      <RugChecks />
     </>
   );
 }

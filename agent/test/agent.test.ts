@@ -179,3 +179,23 @@ test("launch buy with no reference market closes flat after 24h; its P&L joins t
   db.prepare("UPDATE trades SET pnl_sol = 0.5").run(); // pretend it doubled
   assert.equal(airdropPreview(db, "paper").launchPnlLamports, 500_000_000);
 });
+
+test("rug check: blocks freeze/mint authority, permanent delegate, pausable, high risk score; warns on concentration", async () => {
+  const { judgeRugRisk } = await import("../src/market/rugcheck");
+  const opts = { blockMintAuthority: true, maxRiskScore: 75, allowlist: ["BRIDGED"] };
+  const clean = { mintAuthority: null, freezeAuthority: null, extensions: [] };
+  const ok = judgeRugRisk("A", clean, { score_normalised: 54, risks: [{ name: "Top 10 holders high ownership", level: "danger" }] }, opts);
+  assert.equal(ok.verdict, "pass");
+  assert.ok(ok.warnings[0].includes("Top 10 holders"));
+  // SPCX-style token: freeze + mint + permanent delegate + pausable
+  const spcx = judgeRugRisk("B", {
+    mintAuthority: "x", freezeAuthority: "x",
+    extensions: [{ extension: "permanentDelegate", state: { delegate: "x" } }, { extension: "pausableConfig", state: { authority: "x" } }],
+  }, { score_normalised: 81, risks: [] }, opts);
+  assert.equal(spcx.verdict, "blocked");
+  assert.equal(spcx.blocks.length, 5);
+  assert.equal(judgeRugRisk("C", { ...clean, mintAuthority: "x" }, null, opts).verdict, "blocked");
+  assert.equal(judgeRugRisk("BRIDGED", { ...clean, mintAuthority: "x" }, { score_normalised: 71 }, opts).verdict, "pass"); // allowlisted
+  assert.equal(judgeRugRisk("D", clean, { score_normalised: 10, risks: [{ name: "Rugged", level: "danger" }] }, opts).verdict, "blocked");
+  assert.ok(judgeRugRisk("E", clean, null, opts).warnings.includes("RugCheck unavailable — on-chain checks only"));
+});

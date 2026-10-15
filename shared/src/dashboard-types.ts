@@ -164,3 +164,13 @@ export interface LogRow {
   level: string;
   message: string;
 }
+
+export interface RugCheckEntry {
+  mint: string;
+  symbol: string;
+  verdict: "pass" | "blocked";
+  blocks: string[];
+  warnings: string[];
+  rugcheck_score: number | null;
+  checked_at: string;
+}

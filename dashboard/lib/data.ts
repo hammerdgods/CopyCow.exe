@@ -24,7 +24,7 @@ export function missingHostedSetup(): NextResponse | null {
 }
 
 /** Empty-but-valid answers for feeds COWBOT hasn't published yet. */
-const EMPTY: Partial<Record<SnapshotKey, unknown>> = { positions: [], trades: [], logs: [] };
+const EMPTY: Partial<Record<SnapshotKey, unknown>> = { positions: [], trades: [], logs: [], rugchecks: [] };
 
 /** Hosted mode: answer a feed from the copy COWBOT published. */
 export async function feed(key: SnapshotKey): Promise<NextResponse> {
