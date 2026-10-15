@@ -1,0 +1,21 @@
+node_modules/
+.env
+.env.local
+# Local database + wallet keys: NEVER commit these
+data/*
+!data/.gitkeep
+*.db
+*.db-wal
+*.db-shm
+# Build output
+.next/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+# Anchor / Rust
+contracts/target/
+contracts/.anchor/
+contracts/test-ledger/
+contracts/node_modules/
+.DS_Store
+contracts/keys/mainnet/

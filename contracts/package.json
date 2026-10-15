@@ -1,0 +1,29 @@
+{
+  "name": "copycow-contracts",
+  "private": true,
+  "description": "copycow.exe Solana programs (Anchor): tier access, dividend airdrop, treasury.",
+  "scripts": {
+    "prepare-keys": "node scripts/prepare-keys.mjs",
+    "build": "npm run prepare-keys && anchor build",
+    "test": "npm run prepare-keys && anchor test",
+    "deploy:devnet": "bash scripts/deploy.sh devnet",
+    "deploy:mainnet": "bash scripts/deploy.sh mainnet-beta",
+    "init:programs": "ts-node --transpile-only scripts/init-programs.ts"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "0.31.1",
+    "@solana/spl-token": "^0.4.9",
+    "@solana/web3.js": "^1.98.0"
+  },
+  "devDependencies": {
+    "@types/bn.js": "^5.1.6",
+    "@types/chai": "^4.3.20",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.10.0",
+    "chai": "^4.5.0",
+    "mocha": "^10.8.2",
+    "ts-mocha": "^10.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.2"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "name": "@copycow/agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "COWBOT — the autonomous paper-trading agent, trend scanner, token launcher, fee splitter and airdrop keeper.",
+  "scripts": {
+    "agent": "tsx src/index.ts",
+    "cycle": "tsx src/index.ts --once",
+    "scan": "tsx src/trend-scanner/cli.ts",
+    "fees": "tsx src/fees/cli.ts",
+    "airdrop": "tsx src/airdrop/cli.ts",
+    "recap": "tsx src/recap/cli.ts",
+    "wallet": "tsx src/wallet/cli.ts",
+    "status": "tsx src/cli/status.ts",
+    "launch-kit": "tsx ../launch-kit/generate.mts",
+    "seed:demo": "tsx src/cli/seed-demo.ts",
+    "test": "tsx --test test/*.test.ts",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@copycow/shared": "*",
+    "@coral-xyz/anchor": "^0.31.1",
+    "@solana/web3.js": "^1.98.0",
+    "bs58": "^6.0.0",
+    "node-cron": "^3.0.3",
+    "sharp": "^0.33.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/node-cron": "^3.0.11",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

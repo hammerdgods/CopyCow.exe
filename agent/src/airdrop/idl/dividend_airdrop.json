@@ -1,0 +1,1084 @@
+{
+  "address": "DHvKnvryWA3RHUTbX4NCgXwMA7HwM8y7nECXMnpS648X",
+  "metadata": {
+    "name": "dividend_airdrop",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "copycow.exe — dividend_airdrop program"
+  },
+  "instructions": [
+    {
+      "name": "close_epoch",
+      "docs": [
+        "After an epoch expires, release anything unpaid back into the pool",
+        "(it rolls into next week's airdrop) and close the epoch account."
+      ],
+      "discriminator": [
+        13,
+        87,
+        7,
+        133,
+        109,
+        14,
+        83,
+        25
+      ],
+      "accounts": [
+        {
+          "name": "relayer",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "distributor"
+          ]
+        },
+        {
+          "name": "distributor",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  115,
+                  116,
+                  114,
+                  105,
+                  98,
+                  117,
+                  116,
+                  111,
+                  114
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "epoch",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  112,
+                  111,
+                  99,
+                  104
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "epoch_index"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "_epoch_index",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "deposit_fees",
+      "docs": [
+        "Anyone can pay fees in: 10% → holder vault, 90% → treasury. Split enforced here, on-chain."
+      ],
+      "discriminator": [
+        13,
+        215,
+        175,
+        72,
+        53,
+        21,
+        89,
+        5
+      ],
+      "accounts": [
+        {
+          "name": "depositor",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "distributor",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  115,
+                  116,
+                  114,
+                  105,
+                  98,
+                  117,
+                  116,
+                  111,
+                  114
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  118,
+                  105,
+                  100,
+                  101,
+                  110,
+                  100,
+                  45,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "writable": true,
+          "relations": [
+            "distributor"
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "gross_lamports",
+          "type": "u64"
+        },
+        {
+          "name": "source",
+          "type": {
+            "defined": {
+              "name": "FeeSource"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "deposit_from_treasury",
+      "docs": [
+        "The treasury (agent wallet) reports fees it already received (e.g. a",
+        "pump.fun creator-fee claim) and sends EXACTLY 10% of them to the vault.",
+        "The 90% simply stays in the treasury wallet."
+      ],
+      "discriminator": [
+        38,
+        61,
+        10,
+        195,
+        118,
+        76,
+        181,
+        167
+      ],
+      "accounts": [
+        {
+          "name": "treasury",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "distributor"
+          ]
+        },
+        {
+          "name": "distributor",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  115,
+                  116,
+                  114,
+                  105,
+                  98,
+                  117,
+                  116,
+                  111,
+                  114
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  118,
+                  105,
+                  100,
+                  101,
+                  110,
+                  100,
+                  45,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "gross_lamports",
+          "type": "u64"
+        },
+        {
+          "name": "source",
+          "type": {
+            "defined": {
+              "name": "FeeSource"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "distribute",
+      "docs": [
+        "Weekly: the keeper publishes the Merkle root for this epoch's airdrop.",
+        "The snapshot slot is the \"checkpoint\" the holder balances were read at."
+      ],
+      "discriminator": [
+        191,
+        44,
+        223,
+        207,
+        164,
+        236,
+        126,
+        61
+      ],
+      "accounts": [
+        {
+          "name": "relayer",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "distributor"
+          ]
+        },
+        {
+          "name": "distributor",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  115,
+                  116,
+                  114,
+                  105,
+                  98,
+                  117,
+                  116,
+                  111,
+                  114
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  118,
+                  105,
+                  100,
+                  101,
+                  110,
+                  100,
+                  45,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "epoch",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "merkle_root",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "total_lamports",
+          "type": "u64"
+        },
+        {
+          "name": "holder_count",
+          "type": "u32"
+        },
+        {
+          "name": "snapshot_slot",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "initialize",
+      "docs": [
+        "One-time setup. `treasury` = where the 90% goes (the agent wallet)."
+      ],
+      "discriminator": [
+        175,
+        175,
+        109,
+        31,
+        13,
+        152,
+        155,
+        237
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "treasury"
+        },
+        {
+          "name": "distributor",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  115,
+                  116,
+                  114,
+                  105,
+                  98,
+                  117,
+                  116,
+                  111,
+                  114
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  118,
+                  105,
+                  100,
+                  101,
+                  110,
+                  100,
+                  45,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "relayer",
+          "type": "pubkey"
+        },
+        {
+          "name": "copycow_mint",
+          "type": "pubkey"
+        },
+        {
+          "name": "epoch_seconds",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "push_payouts",
+      "docs": [
+        "The relayer pushes SOL directly into holders' wallets (no claim button).",
+        "`remaining_accounts[i]` must be the wallet for `payouts[i]`."
+      ],
+      "discriminator": [
+        63,
+        244,
+        190,
+        23,
+        249,
+        76,
+        241,
+        251
+      ],
+      "accounts": [
+        {
+          "name": "relayer",
+          "signer": true,
+          "relations": [
+            "distributor"
+          ]
+        },
+        {
+          "name": "distributor",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  115,
+                  116,
+                  114,
+                  105,
+                  98,
+                  117,
+                  116,
+                  111,
+                  114
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  118,
+                  105,
+                  100,
+                  101,
+                  110,
+                  100,
+                  45,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "epoch",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  112,
+                  111,
+                  99,
+                  104
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "epoch_index"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "epoch_index",
+          "type": "u64"
+        },
+        {
+          "name": "payouts",
+          "type": {
+            "vec": {
+              "defined": {
+                "name": "Payout"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "set_relayer",
+      "discriminator": [
+        23,
+        243,
+        33,
+        88,
+        110,
+        84,
+        196,
+        37
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "distributor"
+          ]
+        },
+        {
+          "name": "distributor",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  115,
+                  116,
+                  114,
+                  105,
+                  98,
+                  117,
+                  116,
+                  111,
+                  114
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "new_relayer",
+          "type": "pubkey"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Distributor",
+      "discriminator": [
+        90,
+        90,
+        217,
+        147,
+        6,
+        32,
+        135,
+        4
+      ]
+    },
+    {
+      "name": "Epoch",
+      "discriminator": [
+        93,
+        83,
+        120,
+        89,
+        151,
+        138,
+        152,
+        108
+      ]
+    },
+    {
+      "name": "Vault",
+      "discriminator": [
+        211,
+        8,
+        232,
+        43,
+        2,
+        152,
+        117,
+        119
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "EpochPublished",
+      "discriminator": [
+        221,
+        95,
+        77,
+        98,
+        203,
+        18,
+        192,
+        225
+      ]
+    },
+    {
+      "name": "FeesDeposited",
+      "discriminator": [
+        130,
+        131,
+        74,
+        238,
+        201,
+        54,
+        205,
+        192
+      ]
+    },
+    {
+      "name": "PayoutPushed",
+      "discriminator": [
+        57,
+        115,
+        122,
+        211,
+        190,
+        58,
+        26,
+        94
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "ZeroAmount",
+      "msg": "Amount must be greater than zero"
+    },
+    {
+      "code": 6001,
+      "name": "MathOverflow",
+      "msg": "Math overflow"
+    },
+    {
+      "code": 6002,
+      "name": "InvalidEpochLength",
+      "msg": "Epoch length cannot be negative"
+    },
+    {
+      "code": 6003,
+      "name": "TooManyHolders",
+      "msg": "Too many (or zero) holders for one epoch"
+    },
+    {
+      "code": 6004,
+      "name": "EpochNotOver",
+      "msg": "The current epoch is not over yet (weekly schedule)"
+    },
+    {
+      "code": 6005,
+      "name": "InsufficientVaultBalance",
+      "msg": "The vault does not hold enough unreserved SOL"
+    },
+    {
+      "code": 6006,
+      "name": "AccountsMismatch",
+      "msg": "Number of payouts and recipient accounts differ"
+    },
+    {
+      "code": 6007,
+      "name": "RecipientNotWritable",
+      "msg": "Recipient account must be writable"
+    },
+    {
+      "code": 6008,
+      "name": "InvalidIndex",
+      "msg": "Leaf index out of range"
+    },
+    {
+      "code": 6009,
+      "name": "AlreadyPaid",
+      "msg": "This holder was already paid for this epoch"
+    },
+    {
+      "code": 6010,
+      "name": "InvalidProof",
+      "msg": "Merkle proof does not match the published root"
+    },
+    {
+      "code": 6011,
+      "name": "PayoutBelowRent",
+      "msg": "Payout to an empty wallet must cover the rent minimum"
+    },
+    {
+      "code": 6012,
+      "name": "ExceedsEpochTotal",
+      "msg": "Payouts would exceed the epoch total"
+    },
+    {
+      "code": 6013,
+      "name": "EpochNotExpired",
+      "msg": "Epoch has not expired yet"
+    }
+  ],
+  "types": [
+    {
+      "name": "Distributor",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "treasury",
+            "docs": [
+              "Where the 90% goes — the agent wallet."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "relayer",
+            "docs": [
+              "The keeper that publishes roots and pushes payouts."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "copycow_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "epoch_seconds",
+            "type": "i64"
+          },
+          {
+            "name": "current_epoch",
+            "type": "u64"
+          },
+          {
+            "name": "last_distribution_ts",
+            "type": "i64"
+          },
+          {
+            "name": "reserved_lamports",
+            "docs": [
+              "SOL promised to published-but-not-yet-paid epochs."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_deposited_gross",
+            "type": "u64"
+          },
+          {
+            "name": "total_to_holders",
+            "type": "u64"
+          },
+          {
+            "name": "total_to_treasury",
+            "type": "u64"
+          },
+          {
+            "name": "total_distributed",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "vault_bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Epoch",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "index",
+            "type": "u64"
+          },
+          {
+            "name": "merkle_root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "total_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "paid_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "holder_count",
+            "type": "u32"
+          },
+          {
+            "name": "paid_count",
+            "type": "u32"
+          },
+          {
+            "name": "snapshot_slot",
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "paid_bitmap",
+            "docs": [
+              "bit i = 1 once holder i has been paid (prevents double payment)"
+            ],
+            "type": "bytes"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EpochPublished",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "epoch_index",
+            "type": "u64"
+          },
+          {
+            "name": "merkle_root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "total_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "holder_count",
+            "type": "u32"
+          },
+          {
+            "name": "snapshot_slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FeeSource",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "CreatorFee"
+          },
+          {
+            "name": "CopytradeFee"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FeesDeposited",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "gross_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "to_holders",
+            "type": "u64"
+          },
+          {
+            "name": "to_treasury",
+            "type": "u64"
+          },
+          {
+            "name": "source",
+            "type": {
+              "defined": {
+                "name": "FeeSource"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Payout",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "index",
+            "type": "u32"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "proof",
+            "type": {
+              "vec": {
+                "array": [
+                  "u8",
+                  32
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "PayoutPushed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "epoch_index",
+            "type": "u64"
+          },
+          {
+            "name": "index",
+            "type": "u32"
+          },
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Vault",
+      "docs": [
+        "Holds the holders' 10% until it is airdropped."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": []
+      }
+    }
+  ],
+  "constants": [
+    {
+      "name": "HOLDER_FEE_BPS",
+      "type": "u64",
+      "value": "1000"
+    }
+  ]
+}

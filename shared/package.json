@@ -1,0 +1,33 @@
+{
+  "name": "@copycow/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Code shared by the agent, dashboard and copytrade engine: database, fee split constant, tiers, proof hashing.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./constants": "./src/constants.ts",
+    "./tiers": "./src/tiers.ts",
+    "./db": "./src/db.ts",
+    "./env": "./src/env.ts",
+    "./split": "./src/split.ts",
+    "./proof": "./src/proof.ts",
+    "./merkle": "./src/merkle.ts",
+    "./stats": "./src/stats.ts"
+  },
+  "scripts": {
+    "test": "tsx --test test/*.test.ts",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.4.1",
+    "bs58": "^6.0.0",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

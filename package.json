@@ -1,0 +1,32 @@
+{
+  "name": "copycow-exe",
+  "version": "0.1.0",
+  "private": true,
+  "description": "copycow.exe — Copy the Smartest Cow in the Room. COWBOT AI trading agent, dashboard, trend scanner, token launcher, copytrade engine.",
+  "workspaces": [
+    "shared",
+    "agent",
+    "copytrade-engine",
+    "dashboard"
+  ],
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "agent": "npm run agent -w agent",
+    "cycle": "npm run cycle -w agent",
+    "scan": "npm run scan -w agent",
+    "fees": "npm run fees -w agent",
+    "airdrop": "npm run airdrop -w agent",
+    "recap": "npm run recap -w agent",
+    "wallet": "npm run wallet -w agent",
+    "status": "npm run status -w agent",
+    "dashboard": "npm run dev -w dashboard",
+    "engine": "npm run start -w copytrade-engine",
+    "launch-kit": "npm run launch-kit -w agent",
+    "seed:demo": "npm run seed:demo -w agent",
+    "test": "npm test -w shared && npm test -w agent && npm test -w copytrade-engine",
+    "typecheck": "npm run typecheck -w shared && npm run typecheck -w agent && npm run typecheck -w copytrade-engine && npm run typecheck -w dashboard"
+  },
+  "engines": {
+    "node": ">=20.10"
+  }
+}
