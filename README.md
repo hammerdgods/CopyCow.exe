@@ -134,6 +134,32 @@ npm run init:programs -- --cluster mainnet-beta
 ```
 ⚠️ Back up `contracts/keys/mainnet/` and `data/wallet/` somewhere safe and offline. Before mainnet, consider making the admin a multisig (e.g. Squads).
 
+### Host the website on Vercel (copycow.xyz)
+Vercel can't see the database on COWBOT's computer, so COWBOT **publishes the dashboard data to a free Turso database** after every job (about every 5 minutes), and the Vercel site reads it. The website only gets a **read-only** key.
+
+1. **Create the database (free):** sign up at https://turso.tech → **Create Database** → name it `copycow` → copy its URL (looks like `libsql://copycow-yourname.turso.io`).
+2. **Create two tokens** on that database's page → **Create Token**:
+   - one **full access**, for COWBOT;
+   - one **read only**, for Vercel.
+3. **On COWBOT's computer**, put these in `.env`, then check it works:
+   ```
+   TURSO_DATABASE_URL=libsql://copycow-yourname.turso.io
+   TURSO_AUTH_TOKEN=<the FULL-ACCESS token>
+   ```
+   ```bash
+   npm run publish-dashboard
+   npm run agent
+   ```
+4. **On Vercel** → your project → **Settings → Environment Variables**, add:
+   - `TURSO_DATABASE_URL` = the same URL
+   - `TURSO_AUTH_TOKEN` = the **READ-ONLY** token
+   - (optional, for the "Check my tier" box) `COPYCOW_MINT` and `HELIUS_API_KEY`
+
+   Then **Deployments → ⋯ → Redeploy**. Project settings to double-check: **Root Directory = `dashboard`**, Framework = Next.js.
+5. Open your site. It shows COWBOT's data within ~15 seconds of each publish, and "COWBOT is live" turns red if COWBOT stops running.
+
+Until step 4 is done, the site shows a yellow notice explaining what's missing instead of breaking.
+
 ---
 
 ## 3. API keys you need (all free)
@@ -145,6 +171,7 @@ npm run init:programs -- --cluster mainnet-beta
 | **Birdeye** | Backup price feed | https://docs.birdeye.so → free tier → `BIRDEYE_API_KEY` | No |
 | **X API v2** | Trend scanning on X | https://developer.x.com → create a Project + App → "Bearer Token" → `X_BEARER_TOKEN` | No (free DexScreener + GeckoTerminal data is used meanwhile) |
 | GeckoTerminal, DexScreener | Top tokens by volume, trending pools, new tokens | Free, **no key** | — |
+| **Turso** | Lets the Vercel website show COWBOT's data | https://turso.tech → free database + tokens → `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | Only if the website is on Vercel |
 | OpenAI (optional) | Cartoon images for launched tokens | https://platform.openai.com → `OPENAI_API_KEY` | No (plain colored image otherwise) |
 
 **About X's free tier:** it allows only ~100 post reads per month. COWBOT enforces that as a hard budget (`X_MONTHLY_POST_BUDGET`) and spreads it out: about one small X read every 3 days. If your X plan doesn't allow search at all, COWBOT logs a TODO and keeps working on the free sources. A paid X tier makes the X half much stronger.
@@ -174,7 +201,7 @@ npm run init:programs -- --cluster mainnet-beta
 - **Copytrade performance fees go 100% to $COPYCOW holders**, added to the weekly profit airdrop (as in the original brief).
 - **The team's 90% is never COWBOT's money.** If sending it ever fails, COWBOT retries every 30 minutes and leaves it out of its own balance, so it can't be spent on launches. With no `TEAM_WALLET` set, COWBOT doesn't claim rewards at all.
 - **"Anyone can call distribute()."** On Solana a contract can't list every holder by itself, so the weekly snapshot + Merkle tree is built off-chain by COWBOT (the keeper/relayer) and only the relayer may publish it. Otherwise anyone could publish a fake list. The contract still guarantees: no double payments, no payouts beyond the vault, and every payout must match the published list.
-- **Hosting copycow.xyz:** the dashboard reads the same database file as the agent, so host both on the same machine (any small VPS; run `npm run build -w dashboard` then `npm run start -w dashboard`). Platforms like Vercel can't see a local database file.
+- **Hosting copycow.xyz:** on Vercel, the site shows COWBOT's data as of its last publish (every ~5 minutes), via Turso (see "Host the website on Vercel"). COWBOT itself still needs a computer or small server that stays on.
 - Nothing here is financial advice. Meme-token launches are speculative. Start small.
 
 ---

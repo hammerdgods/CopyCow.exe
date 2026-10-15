@@ -23,6 +23,8 @@ import { runCoinAirdrops, runWeeklyAirdrops } from "./airdrop/epoch";
 import { resumeAirdrops } from "./airdrop/onchain";
 import { writeDailyRecap } from "./recap/daily";
 import { loadOrCreateWallet } from "./wallet/wallet";
+import { publishSnapshot } from "./publish/snapshot";
+import { snapshotStoreConfigured } from "@copycow/shared/snapshot-store";
 
 const db = openDb();
 attachLogDb(db);
@@ -47,6 +49,8 @@ async function job(name: string, fn: () => Promise<void>): Promise<void> {
   } finally {
     running.delete(name);
   }
+  // Keep the hosted website (Vercel) in sync after every job.
+  await publishSnapshot(db, { force: name !== "trading cycle" });
 }
 
 const tradingCycle = () => job("trading cycle", () => runTradingCycle(db));
@@ -73,6 +77,7 @@ async function main() {
   const { keypair, created } = loadOrCreateWallet(db);
   if (process.argv.includes("--once")) {
     await runTradingCycle(db);
+    await publishSnapshot(db, { force: true });
     return;
   }
   console.log(BANNER);
@@ -83,6 +88,7 @@ async function main() {
   }
   else say("info", "Everything is PAPER. No real funds will move. Moo.");
   if (!config.heliusApiKey && !config.solanaRpcUrl) say("info", "TODO: add HELIUS_API_KEY to .env for a faster, more reliable Solana connection (using the public RPC for now).");
+  if (snapshotStoreConfigured()) say("info", "Publishing dashboard data to Turso after every job (for the hosted website).");
   if (!config.xBearerToken) say("info", "TODO: add X_BEARER_TOKEN to .env to scan X. Using free sources (DexScreener + GeckoTerminal) meanwhile.");
 
   for (const [name, expr] of Object.entries({ CYCLE_CRON: config.cycleCron, SCAN_CRON: config.scanCron, FEE_POLL_CRON: config.feePollCron, AIRDROP_CRON: config.airdropCron, COIN_AIRDROP_CRON: config.coinAirdropCron, RECAP_CRON: config.recapCron })) {

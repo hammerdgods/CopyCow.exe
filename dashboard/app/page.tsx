@@ -22,6 +22,11 @@ export default function Home() {
 
   return (
     <div className="grid gap-4 lg:grid-cols-3">
+      {error && (
+        <div className="border border-amber/60 bg-amber/10 p-3 text-xs text-amber lg:col-span-3" role="alert">
+          ⚠ No data yet: {error}
+        </div>
+      )}
       {/* HERO */}
       <Window title="C:\COWBOT.EXE" icon="🐄" className="lg:col-span-2" right={<span className="hidden font-pixel text-white/80 sm:inline">v0.1</span>}>
         <div className="relative overflow-hidden p-5 sm:p-8">
@@ -43,8 +48,7 @@ export default function Home() {
               )}
               aria-label={wr === null ? "No closed trades yet" : `Win rate ${wr.toFixed(1)} percent`}
             >
-              {wr === null ? "--.-" : wr.toFixed(1)}
-              <span className="text-[0.4em]">%</span>
+              {wr === null ? <span className="text-[0.35em] tracking-widest">NO TRADES YET</span> : <>{wr.toFixed(1)}<span className="text-[0.4em]">%</span></>}
             </p>
             <p className="mt-2 text-xs text-muted-foreground">
               {s ? `${s.wins}W / ${s.losses}L over ${s.closedTrades} closed trades` : "…"}
@@ -123,7 +127,6 @@ export default function Home() {
         </div>
       </Window>
 
-      {error && <p className="text-xs text-loss lg:col-span-3">Can&apos;t reach the database API: {error}</p>}
     </div>
   );
 }

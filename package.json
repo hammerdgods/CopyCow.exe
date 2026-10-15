@@ -19,6 +19,7 @@
     "recap": "npm run recap -w agent",
     "wallet": "npm run wallet -w agent",
     "status": "npm run status -w agent",
+    "publish-dashboard": "npm run publish-dashboard -w agent",
     "dashboard": "npm run dev -w dashboard",
     "engine": "npm run start -w copytrade-engine",
     "launch-kit": "npm run launch-kit -w agent",

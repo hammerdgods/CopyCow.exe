@@ -13,6 +13,7 @@
     "recap": "tsx src/recap/cli.ts",
     "wallet": "tsx src/wallet/cli.ts",
     "status": "tsx src/cli/status.ts",
+    "publish-dashboard": "tsx src/publish/cli.ts",
     "launch-kit": "tsx ../launch-kit/generate.mts",
     "seed:demo": "tsx src/cli/seed-demo.ts",
     "test": "tsx --test test/*.test.ts",
