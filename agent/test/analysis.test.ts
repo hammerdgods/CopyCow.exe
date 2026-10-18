@@ -183,3 +183,55 @@ test("tiers: crash exits make an insider only as a real pattern (≥3 and ≥25%
   assert.equal(t.tier, "insider");
   assert.match(t.reason, /sold right before 4 crashes \(33% of its trades\)/);
 });
+
+test("USD P&L: SOL's own price move isn't trading profit", () => {
+  // Bought for 2 SOL when SOL = $100 ($200); sold for 2.5 SOL when SOL = $80 ($200).
+  // In SOL that looks like +0.5; in dollars it's break-even.
+  const r = realize(
+    [
+      swap({ ts: iso(2 * H, NOW), side: "buy", sol_amount: 2, usd_amount: 200, token_amount: 1000 }),
+      swap({ ts: iso(H, NOW), side: "sell", sol_amount: 2.5, usd_amount: 200, token_amount: 1000 }),
+    ],
+    600,
+  );
+  assert.ok(Math.abs(r.closed[0].pnlSol - 0.5) < 1e-9);
+  assert.equal(r.closed[0].pnlUsd, 0);
+  assert.equal(r.closed[0].pnlPct, 0); // % return is in USD when known
+});
+
+test("USD P&L: mixes SOL- and USDC-settled legs, partial sells included", () => {
+  const swaps = [
+    swap({ ts: iso(3 * H, NOW), side: "buy", sol_amount: 1, usd_amount: 100, token_amount: 100 }), // paid 1 SOL @ $100
+    swap({ ts: iso(2 * H, NOW), side: "buy", sol_amount: 2, usd_amount: 200, token_amount: 100 }), // paid $200 USDC
+    swap({ ts: iso(H, NOW), side: "sell", sol_amount: 1.5, usd_amount: 180, token_amount: 100 }), // got $180 for half (cost $150)
+    swap({ ts: iso(0.5 * H, NOW), side: "sell", sol_amount: 1, usd_amount: 120, token_amount: 100 }), // got $120 for the rest (cost $150)
+  ];
+  const r = realize(swaps, 600);
+  assert.equal(r.closed[0].costUsd, 300);
+  assert.equal(r.closed[0].proceedsUsd, 300);
+  assert.equal(r.closed[0].pnlUsd, 0);
+  assert.deepEqual(r.events.map((e) => e.pnlUsd), [30, -30]);
+  const st = computeStats(swaps, r, NOW, 600);
+  assert.equal(st.pnl_7d_usd, 0);
+  assert.equal(st.avg_buy_usd, 150);
+});
+
+test("USD P&L: a leg with no known USD value makes that position's USD result unknown, not zero", () => {
+  const r = realize(
+    [
+      swap({ ts: iso(2 * H, NOW), side: "buy", sol_amount: 1, usd_amount: null, token_amount: 10 }),
+      swap({ ts: iso(H, NOW), side: "sell", sol_amount: 2, usd_amount: 200, token_amount: 10 }),
+    ],
+    600,
+  );
+  assert.equal(r.closed[0].pnlUsd, null);
+  assert.equal(r.closed[0].pnlSol, 1);
+  const st = computeStats([], r, NOW, 600);
+  assert.equal(st.pnl_7d_usd, null);
+});
+
+test("tiers judge profit in USD and show dollars", () => {
+  const t = tierOf(trades(14, (i) => (i % 4 === 0 ? -0.1 : 0.3)));
+  assert.equal(t.tier, "proven");
+  assert.match(t.reason, /^\+\$\d/);
+});

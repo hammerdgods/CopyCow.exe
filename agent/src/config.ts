@@ -26,8 +26,8 @@ export const config = {
   grpcToken: envStr("GRPC_TOKEN"),
   /** Programs whose swaps are streamed (default: the memecoin venues + Jupiter). */
   streamPrograms: list("STREAM_PROGRAMS"),
-  /** Promote a live wallet to full analysis once it has realized this much profit on the stream… */
-  streamPromotePnlSol: envNum("STREAM_PROMOTE_PNL_SOL", 1),
+  /** Promote a live wallet to full analysis once it has realized this much profit (USD at settlement) on the stream… */
+  streamPromotePnlUsd: envNum("STREAM_PROMOTE_PNL_USD", 100),
   /** …over at least this many closed trades (with ≥ 50% wins). */
   streamPromoteMinClosed: envNum("STREAM_PROMOTE_MIN_CLOSED", 3),
   /** Most wallets kept in memory at once (idle ones are forgotten first). */
