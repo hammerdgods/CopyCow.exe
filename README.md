@@ -95,6 +95,8 @@ npm run wallet       # COWBOT's wallet address (safe to share) + balance
 npm run recap        # write today's daily report to content/daily/
 npm run fees         # check creator rewards now + show who gets what
 npm run airdrop      # PREVIEW the next airdrops (changes nothing); -- --run = $COPYCOW airdrop now, -- --run-coins = coin airdrops now
+npm run devnet:setup # connect COWBOT to Solana devnet (test network) — see "Go live on DEVNET"
+npm run devnet:give -- <wallet> <amount>   # devnet: send test $COPYCOW to a wallet
 npm run launch-kit   # regenerate the launch-kit texts (checks all character limits)
 npm test             # run all the JavaScript tests
 ```
@@ -134,6 +136,39 @@ npm run deploy:mainnet              # asks you to type "moo" to confirm
 npm run init:programs -- --cluster mainnet-beta
 ```
 ⚠️ Back up `contracts/keys/mainnet/` and `data/wallet/` somewhere safe and offline. Before mainnet, consider making the admin a multisig (e.g. Squads).
+
+### Go live on DEVNET (Solana's free test network) — step by step
+On devnet, COWBOT's wallet, the money contract and the **weekly airdrop really run on Solana** — with free test SOL that has no value. Trading and pump.fun launches stay paper (they only exist on mainnet), using real mainnet prices. The airdrop pays COWBOT's weekly paper profit in test SOL (max 1 test SOL per week by default).
+
+**On your computer, one time:**
+1. Install **Node.js 20+** from https://nodejs.org (LTS).
+2. Get the code: on GitHub, open the repo → green **Code** button → **Download ZIP**, unzip it. (Or `git clone` it.) Open a terminal in that folder.
+3. Install and create your settings file:
+   ```bash
+   npm install
+   npm run setup
+   ```
+4. Open `.env` in a text editor and fill in:
+   - `TEAM_WALLET=` your team's wallet address (on devnet, e.g. your Phantom wallet address)
+   - `TURSO_DATABASE_URL=` and `TURSO_AUTH_TOKEN=` (full-access token) so your Vercel site shows COWBOT's data — see "Host the website on Vercel" below
+   - optional: `HELIUS_API_KEY=` (free at https://dev.helius.xyz), recommended
+5. Connect COWBOT to devnet:
+   ```bash
+   npm run devnet:setup
+   ```
+   If it says the faucet refused, open https://faucet.solana.com, paste the COWBOT address it prints, choose **devnet**, amount **5**, confirm, then run `npm run devnet:setup` again.
+6. Give **test $COPYCOW** to the wallets that should receive airdrops (COWBOT's own wallet never does). To use Phantom: Settings → Developer Settings → Testnet Mode → Solana Devnet, copy your address, then:
+   ```bash
+   npm run devnet:give -- <your Phantom address> 5000000
+   ```
+7. Start COWBOT and leave the window open:
+   ```bash
+   npm run agent
+   ```
+
+**Keep it running:** COWBOT stops when your computer sleeps or the window closes, and the website then shows it offline. Turn off sleep while plugged in (Windows: Settings → System → Power → Sleep = Never; Mac: System Settings → Battery/Energy → "Prevent automatic sleeping"). If it was off at airdrop time, COWBOT runs the missed airdrop as soon as it's back.
+
+**Check it:** `npm run status`, the website, and COWBOT's wallet on Solscan (devnet): the link `npm run devnet:setup` prints. `npm run airdrop` previews this week's airdrop.
 
 ### Host the website on Vercel (copycow.xyz)
 Vercel can't see the database on COWBOT's computer, so COWBOT **publishes the dashboard data to a free Turso database** after every job (about every 5 minutes), and the Vercel site reads it. The website only gets a **read-only** key.

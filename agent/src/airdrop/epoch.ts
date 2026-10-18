@@ -17,11 +17,11 @@
  * Nothing to pay (no profit, no holders…) → nothing is written; it carries over.
  */
 import {
-  airdropLeaf, airdropPreview, buildMerkleTree, commitProof, type DB, LAMPORTS_PER_SOL, nowIso, pendingCoinRewards,
+  airdropLeaf, airdropPreview, buildMerkleTree, commitProof, type DB, getMeta, LAMPORTS_PER_SOL, nowIso, pendingCoinRewards, setMeta,
 } from "@copycow/shared";
 import { config } from "../config";
 import { say } from "../log";
-import { loadOrCreateWallet } from "../wallet/wallet";
+import { loadOrCreateWallet, walletBalanceSol } from "../wallet/wallet";
 import { isPersonalWallet, snapshotHolders } from "./holders";
 import { type AirdropKind, depositForHolders, nextOnchainEpoch, publishAndPushEpoch } from "./onchain";
 
@@ -84,7 +84,9 @@ interface HolderAirdrop {
 }
 
 async function runHolderAirdrop(db: DB, a: HolderAirdrop): Promise<AirdropResult> {
-  const simulated = a.mode === "paper";
+  // On devnet, even paper-profit airdrops really happen on-chain (with test SOL).
+  const devnet = config.network === "devnet";
+  const simulated = a.mode === "paper" && !devnet;
   const skip = (why: string): AirdropResult => {
     say("info", `${a.label} airdrop skipped: ${why}. It carries over to the next run.`);
     return { ran: false, reason: why };
@@ -129,7 +131,7 @@ async function runHolderAirdrop(db: DB, a: HolderAirdrop): Promise<AirdropResult
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(epochIndex, a.kind, a.tokenMint, a.launchedTokenId ?? null, merkleEpoch, a.periodStart, nowIso(), a.mode, simulated ? "paper" : "pending",
       a.poolLamports, a.tradingPnlLamports ?? 0, a.copytradeFeesLamports ?? 0, Number(total), payouts.length, root, snap.slot, proof.id,
-      simulated ? "PAPER: simulated, nothing sent on-chain" : null, nowIso()).lastInsertRowid,
+      simulated ? "PAPER: simulated, nothing sent on-chain" : devnet ? "DEVNET: paid in test SOL on Solana devnet" : null, nowIso()).lastInsertRowid,
   );
   const insertPayout = db.prepare(
     "INSERT INTO airdrop_payouts (epoch_id, leaf_index, wallet, token_balance, amount_lamports, proof, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -144,7 +146,7 @@ async function runHolderAirdrop(db: DB, a: HolderAirdrop): Promise<AirdropResult
     say("fee", `PAPER ${a.label} airdrop #${epochIndex}: ${sol(total)} SOL to ${payouts.length} holders (snapshot slot ${snap.slot}).`);
     return { ran: true, reason: "paper airdrop recorded" };
   }
-  say("fee", `${a.label} airdrop #${epochIndex}: depositing ${sol(total)} SOL and pushing it to ${payouts.length} holders…`);
+  say("fee", `${devnet ? "DEVNET " : ""}${a.label} airdrop #${epochIndex}: depositing ${sol(total)} ${devnet ? "test " : ""}SOL and pushing it to ${payouts.length} holders…`);
   try {
     const sig = await depositForHolders(db, Number(total), a.kind, a.tokenMint);
     db.prepare("UPDATE airdrop_epochs SET tx_signatures=? WHERE id=?").run(JSON.stringify([sig]), epochId);
@@ -171,8 +173,23 @@ export async function runProfitAirdrop(db: DB, mode: "paper" | "real"): Promise<
     say("info", `${label} airdrop skipped: no $COPYCOW mint set yet (COPYCOW_MINT in .env). ${sol(p.poolLamports)} SOL carries over.`);
     return { ran: false, reason: "no $COPYCOW mint" };
   }
+  let pool = p.poolLamports;
+  if (config.network === "devnet") {
+    // Devnet: pay the paper profit in TEST SOL, capped, and only if COWBOT has enough test SOL.
+    pool = Math.min(pool, Math.round(config.devnetAirdropMaxSol * LAMPORTS_PER_SOL));
+    let bal = 0;
+    try {
+      bal = await walletBalanceSol(loadOrCreateWallet(db).keypair.publicKey);
+    } catch {
+      /* treated as 0 */
+    }
+    if (bal * LAMPORTS_PER_SOL < pool + 0.05 * LAMPORTS_PER_SOL) {
+      say("warn", `DEVNET airdrop skipped: COWBOT's wallet has ${bal.toFixed(3)} test SOL, needs ${sol(pool + 0.05 * LAMPORTS_PER_SOL)}. Get free test SOL at https://faucet.solana.com (address: ${loadOrCreateWallet(db).keypair.publicKey.toBase58()}).`);
+      return { ran: false, reason: "not enough test SOL" };
+    }
+  }
   return runHolderAirdrop(db, {
-    mode, kind: "cowbot_profit", tokenMint: config.copycowMint, label, poolLamports: p.poolLamports, minTokens: config.airdropMinTokens,
+    mode, kind: "cowbot_profit", tokenMint: config.copycowMint, label: config.network === "devnet" ? "$COPYCOW profit (devnet test)" : label, poolLamports: pool, minTokens: config.airdropMinTokens,
     periodStart: p.periodStart, tradingPnlLamports: p.tradingPnlLamports + p.launchPnlLamports, copytradeFeesLamports: p.copytradeFeesLamports,
     assign: (epochId) =>
       db.prepare("UPDATE fee_receipts SET airdrop_epoch_id = ? WHERE airdrop_epoch_id IS NULL AND source_type='copytrade_fee' AND simulated = ?")
@@ -182,12 +199,14 @@ export async function runProfitAirdrop(db: DB, mode: "paper" | "real"): Promise<
 
 /** The weekly job: paper profit always (the public paper record); real profit when LAUNCH_MODE=real. */
 export async function runWeeklyAirdrops(db: DB): Promise<void> {
+  setMeta(db, "last_weekly_airdrop_run", nowIso());
   await runProfitAirdrop(db, "paper");
   if (config.launchMode === "real") await runProfitAirdrop(db, "real");
 }
 
 /** DAILY: each launched coin's creator rewards → that coin's holders. */
 export async function runCoinAirdrops(db: DB): Promise<void> {
+  setMeta(db, "last_coin_airdrop_run", nowIso());
   const paper = pendingCoinRewards(db, true);
   if (paper.length) {
     const total = paper.reduce((s, r) => s + r.lamports, 0);
@@ -203,4 +222,21 @@ export async function runCoinAirdrops(db: DB): Promise<void> {
           .run(epochId, c.launched_token_id),
     });
   }
+}
+
+/**
+ * Catch-up for computers that sleep: if COWBOT was off when an airdrop was
+ * scheduled, run it as soon as it's back. (First start just records "now".)
+ */
+export async function runOverdueAirdrops(db: DB): Promise<void> {
+  const overdue = async (key: string, everyMs: number, run: () => Promise<void>, label: string) => {
+    const last = getMeta(db, key);
+    if (!last) return setMeta(db, key, nowIso());
+    if (Date.now() - new Date(last).getTime() > everyMs + 3_600_000) {
+      say("info", `Catching up: the ${label} was missed while COWBOT was off — running it now.`);
+      await run();
+    }
+  };
+  await overdue("last_weekly_airdrop_run", 7 * 86_400_000, () => runWeeklyAirdrops(db), "weekly $COPYCOW airdrop");
+  await overdue("last_coin_airdrop_run", 86_400_000, () => runCoinAirdrops(db), "daily coin airdrop");
 }

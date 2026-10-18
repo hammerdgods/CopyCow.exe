@@ -20,6 +20,7 @@ export function heartbeat(db: DB, status = "live"): void {
   setMeta(db, "heartbeat", nowIso());
   setMeta(db, "agent_status", status);
   setMeta(db, "launch_mode", config.launchMode);
+  setMeta(db, "network", config.network);
   setMeta(db, "trading_mode", "paper");
   setMeta(db, "paper_starting_capital_sol", config.paperStartingCapitalSol);
 }

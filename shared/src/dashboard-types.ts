@@ -6,6 +6,8 @@ export interface Summary {
   agentStatus: string | null;
   tradingMode: string;
   launchMode: string;
+  /** Network COWBOT acts on: "mainnet" or "devnet" (test network). */
+  network: string;
   demo: boolean;
   wallet: { pubkey: string | null; balanceSol: number | null; checkedAt: string | null };
   winRate: number | null;
@@ -136,6 +138,7 @@ export interface AirdropEpoch {
 export interface AirdropsData {
   epochs: AirdropEpoch[];
   pendingPoolSol: number;
+  network: string;
   periodPnlSol: number;
   copytradeFeesSol: number;
   nextAirdropAt: string;

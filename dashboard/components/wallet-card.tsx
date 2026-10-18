@@ -23,12 +23,12 @@ export function WalletCard({ s }: { s: Summary }) {
             >
               {copied ? "Copied" : "Copy"}
             </button>
-            <a className="w95-btn !text-sm" href={solscanAccount(pk)} target="_blank" rel="noreferrer">
+            <a className="w95-btn !text-sm" href={solscanAccount(pk, s.network)} target="_blank" rel="noreferrer">
               Solscan ↗
             </a>
           </div>
           <p className="text-muted-foreground">
-            On-chain balance: <span className="text-foreground num">{s.wallet.balanceSol === null ? "—" : `${s.wallet.balanceSol.toFixed(4)} SOL`}</span>
+            On-chain balance: <span className="text-foreground num">{s.wallet.balanceSol === null ? "—" : `${s.wallet.balanceSol.toFixed(4)} ${s.network === "devnet" ? "test SOL (devnet)" : "SOL"}`}</span>
             {s.tradingMode === "paper" && " · trading identity is paper"}
           </p>
         </>

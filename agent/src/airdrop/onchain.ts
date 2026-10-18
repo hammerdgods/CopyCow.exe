@@ -44,6 +44,40 @@ export async function nextOnchainEpoch(db: DB): Promise<number | null> {
   return Number(d.currentEpoch) + 1;
 }
 
+/** The dev program address committed in contracts/keys (used on devnet). */
+export const DEV_MONEY_PROGRAM_ID = "DHvKnvryWA3RHUTbX4NCgXwMA7HwM8y7nECXMnpS648X";
+
+/** The money contract at a specific address (used by devnet setup before .env has it). */
+export function moneyProgramAt(db: DB, programId: string): Program {
+  const agent = loadOrCreateWallet(db).keypair;
+  const provider = new AnchorProvider(connection(), new Wallet(agent), { commitment: "confirmed" });
+  return new Program({ ...(idlJson as Idl), address: programId }, provider);
+}
+
+export interface DistributorState {
+  admin: string;
+  agent: string;
+  teamWallet: string;
+  copycowMint: string;
+}
+
+export async function readDistributor(prog: Program): Promise<DistributorState | null> {
+  const [distributor] = PK.findProgramAddressSync([Buffer.from("distributor")], prog.programId);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const d = await (prog.account as any).distributor.fetchNullable(distributor);
+  if (!d) return null;
+  return { admin: d.admin.toBase58(), agent: d.agent.toBase58(), teamWallet: d.teamWallet.toBase58(), copycowMint: d.copycowMint.toBase58() };
+}
+
+/** One-time setup: COWBOT's wallet is admin + agent + relayer; 90% of $COPYCOW rewards → team wallet. */
+export async function initializeMoneyContract(prog: Program, teamWallet: string, copycowMint: string, epochSeconds = 7 * 86_400): Promise<string> {
+  const agent = (prog.provider as InstanceType<typeof AnchorProvider>).wallet.publicKey;
+  return prog.methods
+    .initialize(agent, new PK(copycowMint), new BN(epochSeconds))
+    .accounts({ admin: agent, agent, teamWallet: new PK(teamWallet) })
+    .rpc();
+}
+
 /** True when the money contract is configured (DIVIDEND_PROGRAM_ID set). */
 export const contractConfigured = (): boolean => !!config.dividendProgramId;
 
@@ -170,7 +204,7 @@ function rebuildTree(db: DB, epochId: number, merkleEpoch: number): void {
 /** Finish any airdrop that was interrupted (deposit, publish or payouts). */
 export async function resumeAirdrops(db: DB): Promise<void> {
   const rows = db
-    .prepare("SELECT id, total_lamports, status, kind, token_mint FROM airdrop_epochs WHERE mode='real' AND status IN ('deposit_pending','pending','ready','published','partial') ORDER BY id")
+    .prepare("SELECT id, total_lamports, status, kind, token_mint FROM airdrop_epochs WHERE status IN ('deposit_pending','pending','ready','published','partial') ORDER BY id")
     .all() as { id: number; total_lamports: number; status: string; kind: AirdropKind; token_mint: string }[];
   for (const r of rows) {
     if (r.status === "deposit_pending") {

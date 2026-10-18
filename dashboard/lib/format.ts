@@ -20,5 +20,6 @@ export const ago = (iso: string | null | undefined) => {
   return `${Math.round(s / 86400)}d ago`;
 };
 export const pnlClass = (n: number | null | undefined) => (n === null || n === undefined || n === 0 ? "text-muted-foreground" : n > 0 ? "text-win" : "text-loss");
-export const solscanTx = (sig: string) => `https://solscan.io/tx/${sig}`;
-export const solscanAccount = (a: string) => `https://solscan.io/account/${a}`;
+const cluster = (network?: string) => (network === "devnet" ? "?cluster=devnet" : "");
+export const solscanTx = (sig: string, network?: string) => `https://solscan.io/tx/${sig}${cluster(network)}`;
+export const solscanAccount = (a: string, network?: string) => `https://solscan.io/account/${a}${cluster(network)}`;

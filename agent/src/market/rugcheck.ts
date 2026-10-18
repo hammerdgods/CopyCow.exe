@@ -21,7 +21,7 @@
 import { type DB, nowIso, SOL_MINT } from "@copycow/shared";
 import { config } from "../config";
 import { fetchJson } from "../http";
-import { rpcUrl } from "../config";
+import { mainnetRpcUrl } from "../config";
 import { say } from "../log";
 
 export interface OnchainMint {
@@ -80,7 +80,7 @@ export function judgeRugRisk(
 }
 
 async function readMint(mint: string): Promise<OnchainMint> {
-  const res = await fetchJson<{ result?: { value?: { data?: { parsed?: { info?: Record<string, unknown> } } } }; error?: { message: string } }>(rpcUrl(), {
+  const res = await fetchJson<{ result?: { value?: { data?: { parsed?: { info?: Record<string, unknown> } } } }; error?: { message: string } }>(mainnetRpcUrl(), {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getAccountInfo", params: [mint, { encoding: "jsonParsed" }] }),

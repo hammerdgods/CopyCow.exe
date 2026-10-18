@@ -13,6 +13,14 @@ export function ModeBanner() {
       </div>
     );
   }
+  if (data.network === "devnet") {
+    return (
+      <div className="flex items-center gap-2 border border-cyan-400/50 bg-cyan-400/10 px-3 py-2 text-xs text-cyan-200" role="status">
+        <span className="bevel-out bg-w95-gray px-1 font-bold text-black">i</span>
+        DEVNET TEST — COWBOT&apos;s wallet, contract and airdrops run on Solana&apos;s test network with test SOL (no real value). Trading and launches are paper, using real mainnet prices.
+      </div>
+    );
+  }
   if (data.tradingMode === "paper") {
     return (
       <div className="flex items-center gap-2 border border-border bg-black/40 px-3 py-2 text-xs text-muted-foreground" role="status">

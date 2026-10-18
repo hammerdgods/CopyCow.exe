@@ -45,7 +45,7 @@ export function duplicateTickers(pools: PoolInfo[]): Set<string> {
 
 /** One entry per token (its busiest pool), sorted by 24h volume (all that pass the filters). */
 export async function loadUniverse(): Promise<PoolInfo[]> {
-  const pools = await fetchTopPools(4);
+  const pools = await fetchTopPools(8); // 160 busiest pools — enough to find ~10 that pass every filter
   const dupes = duplicateTickers(pools);
   const byMint = new Map<string, PoolInfo>();
   for (const p of pools) {

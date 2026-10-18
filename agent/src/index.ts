@@ -19,7 +19,7 @@ import { runTradingCycle, heartbeat } from "./trading/cycle";
 import { runTrendScan } from "./trend-scanner/scanner";
 import { considerLaunches } from "./token-launcher/launcher";
 import { pollFees } from "./fees/tracker";
-import { runCoinAirdrops, runWeeklyAirdrops } from "./airdrop/epoch";
+import { runCoinAirdrops, runOverdueAirdrops, runWeeklyAirdrops } from "./airdrop/epoch";
 import { resumeAirdrops } from "./airdrop/onchain";
 import { writeDailyRecap } from "./recap/daily";
 import { loadOrCreateWallet } from "./wallet/wallet";
@@ -63,7 +63,7 @@ const feePoll = () =>
   job("reward check", async () => {
     await pollFees(db);
     // A real airdrop that hit a snag gets retried every 30 min, not next week.
-    if (config.launchMode === "real") await resumeAirdrops(db);
+    if (config.launchMode === "real" || config.network === "devnet") await resumeAirdrops(db);
   });
 const airdrop = () => job("weekly airdrop", () => runWeeklyAirdrops(db));
 const coinAirdrop = () => job("coin airdrops", () => runCoinAirdrops(db));
@@ -86,7 +86,9 @@ async function main() {
     say("warn", "LAUNCH_MODE=real — launches, launch-buy sales, reward claims and holder airdrops use REAL SOL. Momentum trading stays paper.");
     if (config.copycowMint && !config.teamWallet) say("warn", "TODO: set TEAM_WALLET in .env — COWBOT won't claim creator rewards until it knows where the team's 90% of $COPYCOW rewards goes.");
   }
+  else if (config.network === "devnet") say("info", "DEVNET mode: wallet, contract and airdrops run on Solana's free test network (test SOL). Trading + launches stay paper. Moo.");
   else say("info", "Everything is PAPER. No real funds will move. Moo.");
+  if (config.launchModeDowngraded) say("warn", "LAUNCH_MODE=real is ignored on devnet (pump.fun only exists on mainnet) — launches stay paper.");
   if (!config.heliusApiKey && !config.solanaRpcUrl) say("info", "TODO: add HELIUS_API_KEY to .env for a faster, more reliable Solana connection (using the public RPC for now).");
   if (snapshotStoreConfigured()) say("info", "Publishing dashboard data to Turso after every job (for the hosted website).");
   if (!config.xBearerToken) say("info", "TODO: add X_BEARER_TOKEN to .env to scan X. Using free sources (DexScreener + GeckoTerminal) meanwhile.");
@@ -100,12 +102,15 @@ async function main() {
   cron.schedule(config.feePollCron, feePoll, opts);
   cron.schedule(config.airdropCron, airdrop, opts);
   cron.schedule(config.coinAirdropCron, coinAirdrop, opts);
+  // Hourly safety net: run any airdrop that was missed while this computer was off/asleep.
+  cron.schedule("7 * * * *", () => void job("airdrop catch-up", () => runOverdueAirdrops(db)), opts);
   cron.schedule(config.recapCron, recap, opts);
 
   // Start grazing right away instead of waiting for the first tick.
   await tradingCycle();
   setTimeout(() => void trendScan(), 20_000);
   setTimeout(() => void feePoll(), 40_000);
+  setTimeout(() => void job("airdrop catch-up", () => runOverdueAirdrops(db)), 60_000);
 }
 
 function shutdown() {

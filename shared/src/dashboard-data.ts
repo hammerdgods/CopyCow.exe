@@ -44,6 +44,7 @@ export function getSummary(d: DB): Summary {
     agentStatus: status,
     tradingMode: getMeta(d, "trading_mode") ?? "paper",
     launchMode: getMeta(d, "launch_mode") ?? "paper",
+    network: getMeta(d, "network") ?? "mainnet",
     demo: getMeta(d, "demo_data") === "1",
     wallet: {
       pubkey: getMeta(d, "wallet_pubkey"),
@@ -155,6 +156,7 @@ export function getAirdrops(d: DB): AirdropsData {
   return {
     epochs,
     pendingPoolSol: p.poolLamports / L,
+    network: getMeta(d, "network") ?? "mainnet",
     periodPnlSol: (p.tradingPnlLamports + p.launchPnlLamports) / L,
     copytradeFeesSol: p.copytradeFeesLamports / L,
     nextAirdropAt: nextAirdropAt(),

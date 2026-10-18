@@ -6,12 +6,26 @@ import { envBool, envNum, envStr, loadEnv, HARD_MAX_LAUNCH_BUY_SOL } from "@copy
 
 loadEnv();
 
-const launchMode = envStr("LAUNCH_MODE", "paper").toLowerCase() === "real" ? "real" : "paper";
+/**
+ * Which Solana network COWBOT ACTS on (wallet, contracts, airdrops):
+ *   mainnet (default) — the real network
+ *   devnet            — Solana's free test network (test SOL, real transactions)
+ * Prices, trading signals and rug checks ALWAYS use mainnet market data.
+ */
+const network = (envStr("SOLANA_NETWORK", "mainnet").toLowerCase() === "devnet" ? "devnet" : "mainnet") as "mainnet" | "devnet";
+const wantedLaunchMode = envStr("LAUNCH_MODE", "paper").toLowerCase() === "real" ? "real" : "paper";
+// pump.fun only exists on mainnet, so on devnet launches always stay paper.
+const launchMode = network === "devnet" ? "paper" : wantedLaunchMode;
 
 export const config = {
   // ---- Mode ----
   /** "paper" (default) = simulate everything. "real" = real token launches, fee claims, airdrops. */
   launchMode: launchMode as "paper" | "real",
+  network,
+  /** True when LAUNCH_MODE=real was asked for but ignored because we're on devnet. */
+  launchModeDowngraded: network === "devnet" && wantedLaunchMode === "real",
+  /** Devnet: cap each weekly test airdrop (test SOL is scarce). */
+  devnetAirdropMaxSol: envNum("DEVNET_AIRDROP_MAX_SOL", 1),
 
   // ---- API keys (all optional — COWBOT degrades gracefully) ----
   heliusApiKey: envStr("HELIUS_API_KEY"),
@@ -114,8 +128,23 @@ export const config = {
 export type Config = typeof config;
 
 /** Which Solana RPC to use: your own URL > Helius (free key) > public RPC. */
+/** The network COWBOT acts on (wallet, contracts, airdrops). */
 export function rpcUrl(): string {
   if (config.solanaRpcUrl) return config.solanaRpcUrl;
+  if (config.network === "devnet") {
+    return config.heliusApiKey ? `https://devnet.helius-rpc.com/?api-key=${config.heliusApiKey}` : "https://api.devnet.solana.com";
+  }
+  return mainnetRpcUrl();
+}
+
+/** Always mainnet: real tokens' settings for rug checks, decimals for quotes. */
+export function mainnetRpcUrl(): string {
+  const custom = envStr("MAINNET_RPC_URL") || (config.network === "mainnet" ? config.solanaRpcUrl : "");
+  if (custom) return custom;
   if (config.heliusApiKey) return `https://mainnet.helius-rpc.com/?api-key=${config.heliusApiKey}`;
   return "https://api.mainnet-beta.solana.com";
 }
+
+/** Solscan link for a transaction or account on the network COWBOT acts on. */
+export const solscan = (kind: "tx" | "account", id: string): string =>
+  `https://solscan.io/${kind}/${id}${config.network === "devnet" ? "?cluster=devnet" : ""}`;

@@ -86,7 +86,7 @@ export default function AirdropsPage() {
                     ) : (
                       <span className="flex flex-wrap gap-x-2">
                         {sigs.slice(0, 3).map((s) => (
-                          <a key={s} className="text-win underline" href={solscanTx(s)} target="_blank" rel="noreferrer">
+                          <a key={s} className="text-win underline" href={solscanTx(s, data?.network)} target="_blank" rel="noreferrer">
                             {shortAddr(s, 5)}↗
                           </a>
                         ))}
