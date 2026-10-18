@@ -30,12 +30,17 @@ export function openDb(file = dbFilePath()): DB {
 const ADDED_COLUMNS: Record<string, Record<string, string>> = {
   wallets: { tx_per_hour: "REAL" },
   wallet_swaps: { quote: "TEXT NOT NULL DEFAULT 'SOL'", quote_amount: "REAL", sol_usd: "REAL" },
+  token_info: { pool_address: "TEXT" },
 };
 
 /** Run once, right after a column first appears. */
 const AFTER_ADDING: Record<string, string> = {
   // USDC/USDT-priced swaps used to be skipped: re-read every wallet's recent history once to pick them up.
   "wallet_swaps.quote": "UPDATE wallets SET last_signature = NULL",
+  // The old "sold before crash" rule compared with today's price and flagged normal memecoin decay:
+  // drop its evidence and re-check every wallet it tagged with the stricter candle-based rule.
+  "token_info.pool_address":
+    "DELETE FROM wallet_evidence WHERE kind = 'sold_before_crash'; UPDATE wallets SET last_analyzed_at = '2000-01-01T00:00:00.000Z' WHERE tier = 'insider'",
 };
 
 function migrate(db: DB): void {

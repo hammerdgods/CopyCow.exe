@@ -12,7 +12,8 @@
  * Insider pattern needs at least one of:
  *   • it's the token's creator, or was funded by the token's creator, and bought that token
  *   • ≥ 3 profitable positions that started with a buy in the token's first minutes, and ≥ 40% of its buys are that early
- *   • ≥ 2 times it sold out shortly before the token crashed ≥ 60%
+ *   • it repeatedly sold right before a crash: ≥ CRASH_MIN_EXITS (3) sales near the top after which the
+ *     token fell ≥ 50% within an hour, making up ≥ CRASH_MIN_SHARE (25%) of its closed trades (see crash.ts)
  * Every rule that fires leaves a piece of evidence, shown on the wallet's page.
  */
 import type { Tier } from "@godseye/shared";
@@ -37,10 +38,10 @@ export interface TierInput {
   previousTier: Tier;
   /** Tokens this wallet bought where it is, or was funded by, the token's creator. */
   creatorLinks: { mint: string; symbol: string; relation: "is_creator" | "funded_by_creator"; signature: string; ts: string }[];
-  /** Positions it closed shortly before a crash: its last sell price vs. the price now. */
-  crashExits: { mint: string; symbol: string; sellPriceSol: number; nowPriceSol: number; signature: string; ts: string }[];
+  /** Sales that came right before a crash (already judged by crash.ts). */
+  crashExits: { mint: string; symbol: string; dropPct: number; minutesToLow: number; signature: string; ts: string }[];
   symbols: Map<string, string>;
-  cfg: { quitAfterDays: number; minClosedForProven: number; earlyBuySeconds: number };
+  cfg: { quitAfterDays: number; minClosedForProven: number; earlyBuySeconds: number; crashMinExits: number; crashMinShare: number };
 }
 
 /** Evidence kinds that describe the wallet's current state (replaced on every analysis), not one specific trade. */
@@ -89,12 +90,13 @@ export function assignTier(i: TierInput): TierResult {
       });
     }
   }
-  const crashes = i.crashExits.filter((x) => x.nowPriceSol <= x.sellPriceSol * 0.4);
-  if (crashes.length >= 2) {
+  const crashes = i.crashExits;
+  const crashShare = s.closed_30d ? crashes.length / s.closed_30d : 0;
+  if (crashes.length >= i.cfg.crashMinExits && crashShare >= i.cfg.crashMinShare) {
     for (const x of crashes) {
       insider.push({
         kind: "sold_before_crash",
-        detail: `Sold out of ${x.symbol}; it's down ${Math.round((1 - x.nowPriceSol / x.sellPriceSol) * 100)}% since`,
+        detail: `Sold ${x.symbol} near the top; it fell ${Math.round(x.dropPct)}% within ${Math.max(1, Math.round(x.minutesToLow))} min`,
         mint: x.mint, signature: x.signature, ts: x.ts,
       });
     }
@@ -104,7 +106,7 @@ export function assignTier(i: TierInput): TierResult {
     const parts = [
       kinds.has("is_creator") || kinds.has("funded_by_creator") ? "linked to token creators" : null,
       kinds.has("early_entry") ? `${earlyWins.length} profitable launch-minute buys` : null,
-      kinds.has("sold_before_crash") ? `sold before ${crashes.length} crashes` : null,
+      kinds.has("sold_before_crash") ? `sold right before ${crashes.length} crashes (${Math.round(crashShare * 100)}% of its trades)` : null,
     ].filter(Boolean);
     return { tier: "insider", reason: `Insider pattern: ${parts.join(", ")}`, evidence: insider };
   }

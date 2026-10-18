@@ -61,6 +61,14 @@ export const config = {
   /** A buy within this many seconds of the token's first pool counts as "early". */
   earlyBuySeconds: envNum("EARLY_BUY_SECONDS", 600),
   minClosedForProven: envNum("MIN_CLOSED_FOR_PROVEN", 10),
+  /** "Sold before a crash" = the token fell at least this much (%)… */
+  crashDropPct: envNum("CRASH_DROP_PCT", 50),
+  /** …within this many minutes of the sale… */
+  crashWindowMinutes: envNum("CRASH_WINDOW_MINUTES", 60),
+  /** …and it counts as an insider pattern only with this many such exits… */
+  crashMinExits: envNum("CRASH_MIN_EXITS", 3),
+  /** …making up at least this share of the wallet's closed trades in 30 days. */
+  crashMinShare: envNum("CRASH_MIN_SHARE", 0.25),
 
   // ---- Learning loop (see src/learning/weights.ts) ----
   learnCron: envStr("LEARN_CRON", "*/15 * * * *"),

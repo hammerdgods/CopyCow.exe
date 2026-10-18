@@ -29,7 +29,7 @@
 | Tier | Rule |
 |---|---|
 | 💤 **Quitter** | No swaps for `QUIT_AFTER_DAYS` (7). |
-| 🕵 **Insider pattern** | Any of: it created the token, or was funded by the token's creator, and traded it · ≥ 3 profitable positions that started in a token's first 10 minutes, with ≥ 40% of its buys that early · sold out ≥ 2 times shortly before a ≥ 60% crash. |
+| 🕵 **Insider pattern** | Any of: it created the token, or was funded by the token's creator, and traded it · ≥ 3 profitable positions that started in a token's first 10 minutes, with ≥ 40% of its buys that early · repeatedly sold near the top right before a crash (the token fell ≥ 50% within an hour of the sale, checked with 15-minute price candles), at least 3 times and in ≥ 25% of its closed trades. |
 | 🍀 **Lucky streak** | Profitable, but one trade made ≥ 70% of the profit, or fewer than `MIN_CLOSED_FOR_PROVEN` (10) closed trades. |
 | ⚠ **Needs attention** | A winner losing this week · a brand-new wallet buying ≥ 3 SOL a trade · one funder behind 5–24 tracked wallets · funded by a tracked wallet (possible rotation). |
 | 🏆 **Proven** | Profitable over 30 days and this week, ≥ 10 closed trades, ≥ 50% wins, no single trade > 50% of profit. |

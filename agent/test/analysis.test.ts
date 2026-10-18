@@ -6,7 +6,7 @@ import { assignTier, type TierInput } from "../src/analysis/tiers";
 import { D, H, iso, swap } from "./helpers";
 
 const NOW = Date.parse("2026-10-18T12:00:00Z");
-const cfg = { quitAfterDays: 7, minClosedForProven: 10, earlyBuySeconds: 600 };
+const cfg = { quitAfterDays: 7, minClosedForProven: 10, earlyBuySeconds: 600, crashMinExits: 3, crashMinShare: 0.25 };
 
 test("realize: average cost, partial sells, closed positions", () => {
   const swaps = [
@@ -142,4 +142,44 @@ test("P&L in SOL: bought with USDC, sold for SOL after SOL's price moved", () =>
     600,
   );
   assert.ok(Math.abs(r.closed[0].pnlSol - 0.5) < 1e-9);
+});
+
+import { isCrashExit, judgeExit } from "../src/analysis/crash";
+import type { Candle } from "../src/market/geckoterminal";
+
+const T0 = 1_760_000_400; // a 15-min candle boundary
+const c = (i: number, o: number, h: number, l: number, cl: number): Candle => [T0 + i * 900, o, h, l, cl];
+const crashCfg = { crashDropPct: 50, crashWindowMinutes: 60 };
+
+test("crash rule: sold near the top, fell 70% within the hour → counts", () => {
+  const candles = [c(-4, 0.9, 1.0, 0.9, 1.0), c(-1, 1.0, 1.05, 0.98, 1.0), c(0, 1.0, 1.0, 0.8, 0.8), c(1, 0.8, 0.8, 0.3, 0.35), c(4, 0.35, 0.4, 0.3, 0.32)];
+  const j = judgeExit(candles, T0 + 60, 1.0, 60)!;
+  assert.ok(j.nearTop);
+  assert.ok(j.dropPct >= 69 && j.dropPct <= 71, `drop ${j.dropPct}`);
+  assert.ok(j.minutesToLow <= 30);
+  assert.equal(isCrashExit(j, crashCfg), true);
+});
+
+test("crash rule: a slow decay over days, or selling into a dump already under way, doesn't count", () => {
+  // only -20% within the hour (the rest of the fall comes days later)
+  const slow = [c(-2, 1, 1, 1, 1), c(0, 1, 1, 0.9, 0.9), c(3, 0.9, 0.9, 0.8, 0.8)];
+  assert.equal(isCrashExit(judgeExit(slow, T0 + 60, 1.0, 60), crashCfg), false);
+  // sold at 0.5 after the token already fell from 1.0 in the previous hour
+  const intoDump = [c(-3, 1, 1, 0.9, 0.9), c(-1, 0.6, 0.6, 0.5, 0.5), c(0, 0.5, 0.5, 0.2, 0.2)];
+  const j = judgeExit(intoDump, T0 + 60, 0.5, 60)!;
+  assert.equal(j.nearTop, false);
+  assert.equal(isCrashExit(j, crashCfg), false);
+  // no candle data → can't judge
+  assert.equal(judgeExit([], T0, 1, 60), null);
+});
+
+test("tiers: crash exits make an insider only as a real pattern (≥3 and ≥25% of closed trades)", () => {
+  const exit = (i: number) => ({ mint: `M${i}`, symbol: `T${i}`, dropPct: 70, minutesToLow: 20, signature: `x${i}`, ts: iso(D, NOW) });
+  const many = trades(40, (i) => (i % 4 === 0 ? -0.1 : 0.3));
+  // 3 crash exits out of 40 closed trades = 7.5% → not insider
+  assert.notEqual(tierOf(many, { crashExits: [0, 1, 2].map(exit) }).tier, "insider");
+  // 4 out of 12 = 33% → insider
+  const t = tierOf(trades(12, () => 0.3), { crashExits: [0, 1, 2, 3].map(exit) });
+  assert.equal(t.tier, "insider");
+  assert.match(t.reason, /sold right before 4 crashes \(33% of its trades\)/);
 });

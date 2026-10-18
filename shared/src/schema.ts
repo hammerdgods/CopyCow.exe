@@ -159,7 +159,21 @@ CREATE TABLE IF NOT EXISTS token_info (
   decimals INTEGER,
   pool_created_at TEXT,
   creator TEXT,
+  pool_address TEXT,
   checked_at TEXT NOT NULL
+);
+
+-- Did the price crash right after a wallet sold? One row per sale checked (see analysis/crash.ts)
+CREATE TABLE IF NOT EXISTS crash_checks (
+  signature TEXT NOT NULL,
+  mint TEXT NOT NULL,
+  -- how far the token fell below the sell price within the window (%), null if no candle data
+  drop_pct REAL,
+  minutes_to_low REAL,
+  -- sold within 20% of the previous hour's high (not into a dump already under way)
+  near_top INTEGER,
+  checked_at TEXT NOT NULL,
+  PRIMARY KEY (signature, mint)
 );
 
 -- Every copy GodsEye made (or decided not to make)
