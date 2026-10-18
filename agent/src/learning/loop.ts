@@ -1,9 +1,9 @@
 /**
  * Runs the learning loop against the database: recompute every wallet's
  * copy weight (see weights.ts), record what changed and why, and return
- * the wallets COWBOT should now be copying.
+ * the wallets GodsEye should now be copying.
  */
-import { type DB, nowIso, setMeta, type Tier } from "@copycow/shared";
+import { type DB, nowIso, setMeta, type Tier } from "@godseye/shared";
 import { config } from "../config";
 import { say, short } from "../log";
 import { computeWeights, type WeightInput } from "./weights";

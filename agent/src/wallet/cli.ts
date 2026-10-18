@@ -1,10 +1,10 @@
-/** `npm run wallet` — shows (or creates) COWBOT's wallet address and balance. */
-import { openDb, setMeta } from "@copycow/shared";
+/** `npm run wallet` — shows (or creates) GodsEye's wallet address and balance. */
+import { openDb, setMeta } from "@godseye/shared";
 import { loadOrCreateWallet, walletBalanceSol, walletFile } from "./wallet";
 
 const db = openDb();
 const { keypair, created } = loadOrCreateWallet(db);
-console.log(created ? "🐄 New COWBOT wallet created!" : "🐄 COWBOT wallet:");
+console.log(created ? "New GodsEye wallet created!" : "GodsEye wallet:");
 console.log(`   Address (public, safe to share): ${keypair.publicKey.toBase58()}`);
 console.log(`   Secret key file (NEVER share):   ${walletFile()}`);
 try {

@@ -1,6 +1,6 @@
 /**
  * Finds the project folder and loads the single shared .env file,
- * so every part of copycow.exe uses the same settings.
+ * so every part of GodsEye uses the same settings.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -8,16 +8,16 @@ import dotenv from "dotenv";
 
 let cachedRoot: string | null = null;
 
-/** The copycow.exe project root (the folder with the top-level package.json). */
+/** The GodsEye project root (the folder with the top-level package.json). */
 export function repoRoot(): string {
   if (cachedRoot) return cachedRoot;
-  if (process.env.COPYCOW_ROOT) return (cachedRoot = path.resolve(process.env.COPYCOW_ROOT));
+  if (process.env.GODSEYE_ROOT) return (cachedRoot = path.resolve(process.env.GODSEYE_ROOT));
   let dir = process.cwd();
   for (;;) {
     const pkg = path.join(dir, "package.json");
     if (fs.existsSync(pkg)) {
       try {
-        if (JSON.parse(fs.readFileSync(pkg, "utf8")).name === "copycow-exe") return (cachedRoot = dir);
+        if (JSON.parse(fs.readFileSync(pkg, "utf8")).name === "godseye") return (cachedRoot = dir);
       } catch {
         /* keep walking up */
       }

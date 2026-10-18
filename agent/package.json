@@ -1,9 +1,9 @@
 {
-  "name": "@copycow/agent",
+  "name": "@godseye/agent",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "COWBOT \u2014 finds profitable Solana wallets, tiers them, tells AI from human, and copy-trades the winners.",
+  "description": "GodsEye — finds profitable Solana wallets, tiers them, tells AI from human, and copy-trades the winners.",
   "scripts": {
     "agent": "tsx src/index.ts",
     "discover": "tsx src/cli/discover.ts",
@@ -18,8 +18,9 @@
     "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {
-    "@copycow/shared": "*",
+    "@godseye/shared": "*",
     "@solana/web3.js": "^1.98.0",
+    "@triton-one/yellowstone-grpc": "8.0.0",
     "bs58": "^6.0.0",
     "node-cron": "^3.0.3"
   },

@@ -1,8 +1,8 @@
 /**
- * COWBOT's voice. Everything it says goes to the terminal AND to the
+ * GodsEye's voice. Everything it says goes to the terminal AND to the
  * database, so the dashboard can show a live "terminal feed".
  */
-import { type DB, nowIso } from "@copycow/shared";
+import { type DB, nowIso } from "@godseye/shared";
 
 type Level = "info" | "trade" | "win" | "loss" | "warn" | "error" | "learn" | "wallet";
 
@@ -24,7 +24,7 @@ export function attachLogDb(d: DB): void {
 
 export function say(level: Level, message: string): void {
   const ts = nowIso();
-  console.log(`\x1b[90m${ts.slice(11, 19)}\x1b[0m ${COLORS[level]}[COWBOT]\x1b[0m ${message}`);
+  console.log(`\x1b[90m${ts.slice(11, 19)}\x1b[0m ${COLORS[level]}[GodsEye]\x1b[0m ${message}`);
   if (!db) return;
   try {
     db.prepare("INSERT INTO agent_log (ts, level, message) VALUES (?, ?, ?)").run(ts, level, message);

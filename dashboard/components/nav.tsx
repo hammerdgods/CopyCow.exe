@@ -3,33 +3,24 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
+/** Four sections; each one's sub-pages are linked from inside it. */
 export const NAV = [
-  { href: "/", label: "Home" },
-  { href: "/wallets", label: "Wallet Database" },
-  { href: "/groups", label: "Fresh Wallets" },
-  { href: "/leaders", label: "Who COWBOT Copies" },
-  { href: "/copies", label: "Live Copies" },
-  { href: "/performance", label: "Performance" },
-  { href: "/proof", label: "Proof Ledger" },
+  { href: "/", label: "Home", match: ["/"] },
+  { href: "/stream", label: "Live", match: ["/stream"] },
+  { href: "/wallets", label: "Wallets", match: ["/wallets", "/groups"] },
+  { href: "/copies", label: "Copying", match: ["/copies", "/leaders", "/performance", "/proof"] },
 ];
 
 export function Nav() {
   const path = usePathname();
   return (
-    <nav className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0" aria-label="Main">
-      <ul className="flex min-w-max gap-1">
+    <nav aria-label="Main">
+      <ul className="flex gap-4 text-xs uppercase tracking-widest">
         {NAV.map((n) => {
-          const active = n.href === "/" ? path === "/" : path.startsWith(n.href);
+          const active = n.href === "/" ? path === "/" : n.match.some((m) => path.startsWith(m));
           return (
             <li key={n.href}>
-              <Link
-                href={n.href}
-                className={cn(
-                  "block px-3 py-1.5 text-[12px] uppercase tracking-widest transition-colors",
-                  active ? "bevel-in bg-black text-win" : "bevel-out bg-w95-gray text-black hover:bg-white",
-                )}
-                aria-current={active ? "page" : undefined}
-              >
+              <Link href={n.href} aria-current={active ? "page" : undefined} className={cn("py-1 transition-colors", active ? "border-b-2 border-win text-win" : "text-muted-foreground hover:text-foreground")}>
                 {n.label}
               </Link>
             </li>
@@ -39,3 +30,28 @@ export function Nav() {
     </nav>
   );
 }
+
+/** Small links between a section's pages. */
+export function SubNav({ links }: { links: { href: string; label: string }[] }) {
+  const path = usePathname();
+  return (
+    <div className="flex flex-wrap gap-3 text-xs">
+      {links.map((l) => (
+        <Link key={l.href} href={l.href} className={cn(path === l.href ? "text-win" : "text-muted-foreground underline decoration-dotted underline-offset-4 hover:text-foreground")}>
+          {l.label}
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+export const COPYING_LINKS = [
+  { href: "/copies", label: "Positions" },
+  { href: "/leaders", label: "Who it copies" },
+  { href: "/performance", label: "Performance" },
+  { href: "/proof", label: "Proof ledger" },
+];
+export const WALLET_LINKS = [
+  { href: "/wallets", label: "All wallets" },
+  { href: "/groups", label: "Fresh wallets by funder" },
+];

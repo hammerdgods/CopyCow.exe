@@ -3,7 +3,7 @@
  *   buy  → adds tokens and their SOL cost
  *   sell → profit = SOL received − average cost of the tokens sold
  * A "position" closes when (almost) all tokens of that coin are sold; a win
- * is a closed position that made money. Sells of tokens COWBOT never saw
+ * is a closed position that made money. Sells of tokens GodsEye never saw
  * bought (received by transfer, or bought before it started reading) are
  * ignored, so they can't fake a profit.
  */

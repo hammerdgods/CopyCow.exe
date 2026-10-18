@@ -1,5 +1,5 @@
 /**
- * Solana programs and accounts COWBOT recognizes when reading a transaction.
+ * Solana programs and accounts GodsEye recognizes when reading a transaction.
  * Used to label where a swap happened (venue) and as signals for the
  * AI-vs-human classifier (e.g. Jito tips, calling an AMM directly).
  */
@@ -42,7 +42,7 @@ export const JITO_TIP_ACCOUNTS = new Set([
   "3AVi9Tg9Uo68tJfuvoKvqKNWKkC5wPdSSdeBnizKZ6jT",
 ]);
 
-/** Programs COWBOT's own Jupiter swap transactions may call at the top level (checked before signing). */
+/** Programs GodsEye's own Jupiter swap transactions may call at the top level (checked before signing). */
 export const ALLOWED_SWAP_PROGRAMS = new Set([
   "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
   "11111111111111111111111111111111",

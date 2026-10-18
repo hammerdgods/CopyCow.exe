@@ -1,4 +1,4 @@
-/** Opens the shared SQLite database (data/copycow.db by default). */
+/** Opens the shared SQLite database (data/godseye.db by default). */
 import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
@@ -8,8 +8,12 @@ import { SCHEMA_SQL } from "./schema";
 export type DB = Database.Database;
 
 export function dbFilePath(): string {
-  const custom = process.env.COPYCOW_DB_PATH?.trim();
-  return custom ? path.resolve(repoRoot(), custom) : path.join(repoRoot(), "data", "copycow.db");
+  const custom = process.env.GODSEYE_DB_PATH?.trim();
+  if (custom) return path.resolve(repoRoot(), custom);
+  const file = path.join(repoRoot(), "data", "godseye.db");
+  // Databases from before the GodsEye rename are picked up as they are.
+  const legacy = path.join(repoRoot(), "data", "copycow.db");
+  return !fs.existsSync(file) && fs.existsSync(legacy) ? legacy : file;
 }
 
 export function openDb(file = dbFilePath()): DB {

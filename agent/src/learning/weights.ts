@@ -1,5 +1,5 @@
 /**
- * THE LEARNING LOOP — decides whom COWBOT copies, and how much.
+ * THE LEARNING LOOP — decides whom GodsEye copies, and how much.
  *
  * It always sides with whoever is making money right now:
  *   • A wallet's weight follows its realized profit over the last 7 days
@@ -7,14 +7,14 @@
  *     back that up.
  *   • Losing over 7 days → weight 0 immediately. No second chances until it
  *     makes money again (then it comes back on its own).
- *   • COWBOT also learns from its OWN results: if copying a wallet has lost
- *     COWBOT money over the last 14 days (late entries, slippage), that wallet
+ *   • GodsEye also learns from its OWN results: if copying a wallet has lost
+ *     GodsEye money over the last 14 days (late entries, slippage), that wallet
  *     is dropped even if the wallet itself is winning.
  *   • Only the top COPY_MAX_LEADERS earners get weight; weights add up to 1.
  *   • New weights move halfway from the old ones (no whiplash), except
  *     drops to 0, which happen at once.
  */
-import type { Tier } from "@copycow/shared";
+import type { Tier } from "@godseye/shared";
 
 export interface WeightInput {
   address: string;
@@ -24,7 +24,7 @@ export interface WeightInput {
   closed30: number;
   winRate30: number | null;
   isFresh: boolean;
-  /** COWBOT's own realized P&L from copying this wallet over the last 14 days. */
+  /** GodsEye's own realized P&L from copying this wallet over the last 14 days. */
   copyPnl14: number;
   copyClosed14: number;
   oldWeight: number;
@@ -43,7 +43,7 @@ export function rawScore(w: WeightInput, cfg: { copyLossDropSol: number }): Weig
   if (w.tier === "quitter") return { weight: 0, reason: "stopped trading" };
   if (w.pnl7 <= 0) return { weight: 0, reason: `not making money this week (${sol(w.pnl7)})` };
   if (w.copyClosed14 >= 3 && w.copyPnl14 <= -cfg.copyLossDropSol) {
-    return { weight: 0, reason: `COWBOT's copies of it lost ${sol(w.copyPnl14)} over 14 days, so it can't be copied profitably` };
+    return { weight: 0, reason: `GodsEye's copies of it lost ${sol(w.copyPnl14)} over 14 days, so it can't be copied profitably` };
   }
   const profit = 0.6 * Math.sqrt(w.pnl7) + 0.4 * Math.sqrt(Math.max(0, w.pnl30));
   const confidence = clamp(w.closed30 / 20, 0.1, 1);

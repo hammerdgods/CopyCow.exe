@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { TIER_DESCRIPTIONS } from "@copycow/shared/constants";
+import { TIER_DESCRIPTIONS } from "@godseye/shared/constants";
 import { PageHeader } from "@/components/page-header";
 import { Window } from "@/components/window";
 import { Stat } from "@/components/stat";
@@ -33,7 +33,7 @@ export default function WalletPage({ params }: { params: { address: string } }) 
     return (
       <>
         <PageHeader title="Wallet" kicker={params.address} />
-        <Window title="ERROR.TXT" icon="⚠">
+        <Window title="Not found">
           <p className="p-4 text-sm text-muted-foreground">
             {error}{" "}
             <a className="underline" href={solscanAccount(params.address)} target="_blank" rel="noreferrer">
@@ -49,19 +49,19 @@ export default function WalletPage({ params }: { params: { address: string } }) 
 
   return (
     <>
-      <PageHeader title="Wallet" kicker="public profile · every label shows its evidence">
+      <PageHeader title="Wallet" kicker="every label shows its evidence">
         <Link href="/wallets" className="text-xs text-muted-foreground underline">
           ← all wallets
         </Link>
       </PageHeader>
 
-      <Window title={w.address} icon="👛" className="mb-4">
+      <Window title={w.address} className="mb-3">
         <div className="flex flex-col gap-3 p-4">
           <div className="flex flex-wrap items-center gap-2">
             <TierBadge tier={w.tier} className="text-sm" />
             <KindBadge kind={w.kind} score={w.ai_score} className="text-sm" />
             {w.is_fresh === 1 && <span className="border border-win/40 px-1.5 py-0.5 text-[11px] font-bold uppercase text-win">fresh wallet</span>}
-            {w.copy_weight > 0 && <span className="border border-win/60 bg-win/10 px-1.5 py-0.5 text-[11px] font-bold uppercase text-win">COWBOT copies this · {(w.copy_weight * 100).toFixed(0)}%</span>}
+            {w.copy_weight > 0 && <span className="border border-win/60 bg-win/10 px-1.5 py-0.5 text-[11px] font-bold uppercase text-win">GodsEye copies this · {(w.copy_weight * 100).toFixed(0)}%</span>}
             <a href={solscanAccount(w.address)} target="_blank" rel="noreferrer" className="ml-auto text-xs text-muted-foreground underline">
               Solscan ↗
             </a>
@@ -86,17 +86,17 @@ export default function WalletPage({ params }: { params: { address: string } }) 
         </div>
       </Window>
 
-      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-        <Stat label="7d P&L" value={signedSol(s?.pnl_7d_sol, 2)} sub="SOL realized" valueClass={pnlClass(s?.pnl_7d_sol)} />
-        <Stat label="30d P&L" value={signedSol(s?.pnl_30d_sol, 2)} sub="SOL realized" valueClass={pnlClass(s?.pnl_30d_sol)} />
-        <Stat label="Win rate 30d" value={s?.win_rate_30d == null ? "—" : `${Math.round(s.win_rate_30d * 100)}%`} sub={s ? `${s.wins_30d}/${s.closed_30d} closed` : ""} />
-        <Stat label="Best trade share" value={s?.best_trade_share == null ? "—" : `${Math.round(s.best_trade_share * 100)}%`} sub="of 30d profit" />
-        <Stat label="Avg buy" value={s?.avg_buy_sol == null ? "—" : s.avg_buy_sol.toFixed(2)} sub={s?.avg_hold_minutes == null ? "SOL" : `SOL · holds ~${Math.round(s.avg_hold_minutes)}m`} />
-        <Stat label="Launch-minute buys" value={s?.early_buy_rate == null ? "—" : `${Math.round(s.early_buy_rate * 100)}%`} sub={s ? `${s.early_buys} buys` : ""} />
+      <div className="mb-3 grid grid-cols-2 gap-px border bg-border sm:grid-cols-3 lg:grid-cols-6">
+        <Stat className="border-0" label="7d P&L" value={signedSol(s?.pnl_7d_sol, 2)} sub="SOL realized" valueClass={pnlClass(s?.pnl_7d_sol)} />
+        <Stat className="border-0" label="30d P&L" value={signedSol(s?.pnl_30d_sol, 2)} sub="SOL realized" valueClass={pnlClass(s?.pnl_30d_sol)} />
+        <Stat className="border-0" label="Win rate 30d" value={s?.win_rate_30d == null ? "—" : `${Math.round(s.win_rate_30d * 100)}%`} sub={s ? `${s.wins_30d}/${s.closed_30d} closed` : ""} />
+        <Stat className="border-0" label="Best trade share" value={s?.best_trade_share == null ? "—" : `${Math.round(s.best_trade_share * 100)}%`} sub="of 30d profit" />
+        <Stat className="border-0" label="Avg buy" value={s?.avg_buy_sol == null ? "—" : s.avg_buy_sol.toFixed(2)} sub={s?.avg_hold_minutes == null ? "SOL" : `SOL · holds ~${Math.round(s.avg_hold_minutes)}m`} />
+        <Stat className="border-0" label="Launch-minute buys" value={s?.early_buy_rate == null ? "—" : `${Math.round(s.early_buy_rate * 100)}%`} sub={s ? `${s.early_buys} buys` : ""} />
       </div>
 
-      <div className="mb-4 grid gap-4 lg:grid-cols-2">
-        <Window title="EVIDENCE.LOG" icon="🔎">
+      <div className="mb-3 grid gap-3 lg:grid-cols-2">
+        <Window title="Evidence">
           <div className="divide-y">
             {data.evidence.length === 0 && <p className="p-4 text-sm text-muted-foreground">No flags. Nothing unusual found.</p>}
             {data.evidence.map((e) => (
@@ -116,7 +116,7 @@ export default function WalletPage({ params }: { params: { address: string } }) 
           </div>
         </Window>
 
-        <Window title="AI_OR_HUMAN.TXT" icon="🤖">
+        <Window title="AI or human">
           <div className="p-3 text-xs">
             <p className="mb-2 text-muted-foreground">
               Starts at 50. Points push it toward AI / bot (≥ 65) or human (≤ 35). On-chain, an AI agent and a scripted bot look the same, so &quot;AI / bot&quot;
@@ -140,10 +140,10 @@ export default function WalletPage({ params }: { params: { address: string } }) 
       </div>
 
       {(w.copy_weight > 0 || data.weightHistory.length > 0 || data.copies.length > 0) && (
-        <Window title="COWBOT_AND_THIS_WALLET.TXT" icon="🐄" className="mb-4">
+        <Window title="GodsEye and this wallet" className="mb-3">
           <div className="grid gap-4 p-3 text-xs lg:grid-cols-2">
             <div>
-              <p className="mb-1 text-muted-foreground">Learning loop: how COWBOT&apos;s copy weight for this wallet changed</p>
+              <p className="mb-1 text-muted-foreground">Learning loop: how GodsEye&apos;s copy weight for this wallet changed</p>
               {data.weightHistory.length === 0 && <p className="text-muted-foreground">no changes yet</p>}
               {data.weightHistory.map((h) => (
                 <p key={h.id}>
@@ -153,7 +153,7 @@ export default function WalletPage({ params }: { params: { address: string } }) 
             </div>
             <div>
               <p className="mb-1 text-muted-foreground">
-                COWBOT&apos;s results copying it: <span className={cn("font-bold", pnlClass(data.copyPnlSol))}>{signedSol(data.copyPnlSol, 3)} SOL</span> over {data.copyClosed} closed positions
+                GodsEye&apos;s results copying it: <span className={cn("font-bold", pnlClass(data.copyPnlSol))}>{signedSol(data.copyPnlSol, 3)} SOL</span> over {data.copyClosed} closed positions
               </p>
               {data.copies.slice(0, 15).map((c) => (
                 <p key={c.id}>
@@ -167,7 +167,7 @@ export default function WalletPage({ params }: { params: { address: string } }) 
       )}
 
       {data.group.length > 0 && w.funder && (
-        <Window title={`SIBLINGS.LST — same funder ${w.funder.slice(0, 4)}…${w.funder.slice(-4)}`} icon="👥" className="mb-4">
+        <Window title={`Same funder ${w.funder.slice(0, 4)}…${w.funder.slice(-4)}`} className="mb-3">
           <div className="flex flex-wrap gap-2 p-3">
             {data.group.map((g) => (
               <span key={g.address} className="flex items-center gap-1.5 border px-2 py-1 text-xs">
@@ -178,7 +178,7 @@ export default function WalletPage({ params }: { params: { address: string } }) 
         </Window>
       )}
 
-      <Window title={`SWAPS.LOG — latest ${data.swaps.length}`} icon="↔">
+      <Window title={`Swaps · latest ${data.swaps.length}`}>
         <Table>
           <TableHeader>
             <TableRow>

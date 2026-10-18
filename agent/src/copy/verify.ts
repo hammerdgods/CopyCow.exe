@@ -1,21 +1,21 @@
 /**
- * NEVER SIGN BLIND. Jupiter's API builds COWBOT's swap transactions; before
- * signing one, COWBOT checks it two ways:
+ * NEVER SIGN BLIND. Jupiter's API builds GodsEye's swap transactions; before
+ * signing one, GodsEye checks it two ways:
  *
- *   1. Static check: COWBOT pays the fee and is the only signer; top-level
+ *   1. Static check: GodsEye pays the fee and is the only signer; top-level
  *      instructions only use Jupiter + plumbing programs (compute budget,
  *      system, token, associated-token); a plain SOL transfer may only go to
- *      COWBOT's own wrapped-SOL account; token instructions may only sync or
- *      close COWBOT's own accounts; the priority fee is within the limit.
+ *      GodsEye's own wrapped-SOL account; token instructions may only sync or
+ *      close GodsEye's own accounts; the priority fee is within the limit.
  *   2. Simulation: run it against the current chain state and check what it
  *      would actually do. A buy must cost no more SOL than planned and must
- *      deliver at least the quoted minimum of tokens into COWBOT's own token
+ *      deliver at least the quoted minimum of tokens into GodsEye's own token
  *      account; a sell must pay at least the quoted minimum SOL back.
  *
  * If either check fails, nothing is signed.
  */
 import { PublicKey, type Connection, type VersionedTransaction } from "@solana/web3.js";
-import { SOL_MINT } from "@copycow/shared";
+import { SOL_MINT } from "@godseye/shared";
 import { ALLOWED_SWAP_PROGRAMS } from "../chain/programs";
 
 const SYSTEM = "11111111111111111111111111111111";
@@ -34,8 +34,8 @@ export function associatedTokenAddress(owner: PublicKey, mint: PublicKey, tokenP
 export function staticCheck(tx: VersionedTransaction, wallet: PublicKey, maxPriorityLamports: number): string | null {
   const msg = tx.message;
   const keys = msg.staticAccountKeys;
-  if (!keys[0]?.equals(wallet)) return "COWBOT is not the fee payer";
-  if (msg.header.numRequiredSignatures !== 1) return `needs ${msg.header.numRequiredSignatures} signatures (expected only COWBOT's)`;
+  if (!keys[0]?.equals(wallet)) return "GodsEye is not the fee payer";
+  if (msg.header.numRequiredSignatures !== 1) return `needs ${msg.header.numRequiredSignatures} signatures (expected only GodsEye's)`;
   const wsolAta = associatedTokenAddress(wallet, new PublicKey(SOL_MINT), new PublicKey(TOKEN));
   const key = (i: number) => (i < keys.length ? keys[i] : null); // lookup-table accounts can't be checked statically
   let cuLimit = 200_000;
@@ -47,7 +47,7 @@ export function staticCheck(tx: VersionedTransaction, wallet: PublicKey, maxPrio
     if (program === SYSTEM) {
       if (data.readUInt32LE(0) !== 2) return "uses a system instruction other than a transfer";
       const dest = key(ix.accountKeyIndexes[1]);
-      if (!dest?.equals(wsolAta)) return `sends SOL to ${dest?.toBase58() ?? "an unknown account"}, not COWBOT's wrapped-SOL account`;
+      if (!dest?.equals(wsolAta)) return `sends SOL to ${dest?.toBase58() ?? "an unknown account"}, not GodsEye's wrapped-SOL account`;
     } else if (program === TOKEN || program === TOKEN_2022) {
       if (data[0] === 17) continue; // SyncNative
       if (data[0] !== 9) return `uses token instruction ${data[0]} (only sync/close allowed)`;
@@ -69,7 +69,7 @@ const tokenAmountFromData = (b64: string): bigint => {
   return data.length >= 72 ? data.readBigUInt64LE(64) : 0n;
 };
 
-/** Simulates the swap and checks its effect on COWBOT's balances. Throws if anything is off. */
+/** Simulates the swap and checks its effect on GodsEye's balances. Throws if anything is off. */
 export async function simulateCheck(
   conn: Connection,
   tx: VersionedTransaction,

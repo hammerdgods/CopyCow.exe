@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* copycow.exe — dark terminal / Win95 executable / Bloomberg */
+/* GodsEye — dark terminal / Bloomberg */
 @layer base {
   :root {
     --background: 160 12% 3.5%;

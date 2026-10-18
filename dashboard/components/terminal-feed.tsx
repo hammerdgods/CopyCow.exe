@@ -19,7 +19,7 @@ export function TerminalFeed({ limit = 14 }: { limit?: number }) {
   const rows = (data ?? []).slice(0, limit);
   return (
     <div className="h-full min-h-[220px] bg-black p-3 text-[12px] leading-relaxed" role="log" aria-live="polite">
-      {rows.length === 0 && <p className="text-muted-foreground">C:\COWBOT&gt; waiting for the first moo…</p>}
+      {rows.length === 0 && <p className="text-muted-foreground">godseye&gt; waiting for the first event…</p>}
       {rows.map((r) => (
         <p key={r.id} className="break-words">
           <span className="text-muted-foreground">{r.ts.slice(11, 19)}</span>{" "}
@@ -27,7 +27,7 @@ export function TerminalFeed({ limit = 14 }: { limit?: number }) {
         </p>
       ))}
       <p className="text-win">
-        C:\COWBOT&gt; <span className="animate-blink">█</span>
+        godseye&gt; <span className="animate-blink">█</span>
       </p>
     </div>
   );

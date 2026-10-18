@@ -1,8 +1,8 @@
 /**
- * Everything the public dashboard shows, computed from COWBOT's database.
+ * Everything the public dashboard shows, computed from GodsEye's database.
  * Used two ways:
  *   • locally: the dashboard's API routes call these directly
- *   • hosted (Vercel): COWBOT runs these and publishes the results to Turso
+ *   • hosted (Vercel): GodsEye runs these and publishes the results to Turso
  *     (see agent/src/publish/snapshot.ts); the website reads those copies.
  */
 import { type DB, getMeta } from "./db";
@@ -10,7 +10,7 @@ import { HEARTBEAT_STALE_MINUTES, TIERS, WALLET_KINDS, type Tier, type WalletKin
 import { equityCurve, maxDrawdown, monthlyReturns, rollingWinRate, winRate } from "./stats";
 import { verifyProofChain, type ProofEntry } from "./proof";
 import type {
-  CopiesData, CopyTrade, Evidence, KindReason, Leader, LeadersData, LogRow, Performance, Position, ProofData, RugCheckEntry,
+  LiveQuery, LiveWalletRow, CopiesData, CopyTrade, Evidence, KindReason, Leader, LeadersData, LogRow, Performance, Position, ProofData, RugCheckEntry,
   Summary, SwapRow, WalletDetail, WalletGroup, WalletList, WalletQuery, WalletRow, WalletStats, WeightChange,
 } from "./dashboard-types";
 
@@ -79,7 +79,42 @@ export function getSummary(d: DB): Summary {
     kindCounts,
     lastLearningAt: getMeta(d, "last_learning_at"),
     lastDiscoveryAt: getMeta(d, "last_discovery_at"),
+    stream: {
+      enabled: getMeta(d, "stream_enabled") === "1",
+      status: getMeta(d, "stream_status"),
+      lastAt: getMeta(d, "stream_last_at"),
+      txPerSec: getMeta(d, "stream_tx_per_sec") === null ? null : Number(getMeta(d, "stream_tx_per_sec")),
+      swapsPerSec: getMeta(d, "stream_swaps_per_sec") === null ? null : Number(getMeta(d, "stream_swaps_per_sec")),
+      walletsInMemory: getMeta(d, "stream_wallets_in_memory") === null ? null : Number(getMeta(d, "stream_wallets_in_memory")),
+      walletsSeen24h: (d.prepare("SELECT COUNT(*) n FROM wallet_activity WHERE last_seen_at >= ?").get(dayAgo) as { n: number }).n,
+      walletsSeenTotal: (d.prepare("SELECT COUNT(*) n FROM wallet_activity").get() as { n: number }).n,
+    },
   };
+}
+
+/** Same filter/sort as getLiveWallets, on a published copy (hosted website). */
+export function filterLiveWallets(rows: LiveWalletRow[], q: LiveQuery = {}): LiveWalletRow[] {
+  const key: Record<NonNullable<LiveQuery["sort"]>, (r: LiveWalletRow) => number> = {
+    pnl: (r) => r.live_pnl_sol, swaps: (r) => r.swaps, volume: (r) => r.volume_sol, recent: (r) => Date.parse(r.last_seen_at),
+  };
+  const k = key[q.sort ?? "pnl"];
+  return rows
+    .filter((r) => !q.kind || q.kind === "all" || r.live_kind === q.kind)
+    .sort((a, b) => k(b) - k(a))
+    .slice(0, Math.min(2000, Math.max(1, q.limit ?? 200)));
+}
+
+const LIVE_SORT = { pnl: "a.live_pnl_sol DESC", swaps: "a.swaps DESC", volume: "a.volume_sol DESC", recent: "a.last_seen_at DESC" } as const;
+
+/** Wallets seen on the live stream, with their tier if GodsEye has analyzed them. */
+export function getLiveWallets(d: DB, q: LiveQuery = {}): LiveWalletRow[] {
+  const kind = q.kind && q.kind !== "all" ? q.kind : null;
+  return d
+    .prepare(
+      `SELECT a.*, w.tier FROM wallet_activity a LEFT JOIN wallets w ON w.address = a.address
+        WHERE (? IS NULL OR a.live_kind = ?) ORDER BY ${LIVE_SORT[q.sort ?? "pnl"]} LIMIT ?`,
+    )
+    .all(kind, kind, Math.min(2000, Math.max(1, q.limit ?? 200))) as LiveWalletRow[];
 }
 
 /** Every wallet row (newest analysis first), capped so a published copy stays small. */
@@ -147,7 +182,7 @@ export function getWalletDetail(d: DB, address: string): WalletDetail | null {
   };
 }
 
-/** Wallets grouped by who funded them — how COWBOT spots one person running many fresh wallets. */
+/** Wallets grouped by who funded them — how GodsEye spots one person running many fresh wallets. */
 export function getWalletGroups(d: DB, limit = 100): WalletGroup[] {
   const groups = d
     .prepare(
@@ -226,7 +261,7 @@ export function getLogs(d: DB, limit = 40): LogRow[] {
   return d.prepare("SELECT * FROM agent_log ORDER BY id DESC LIMIT ?").all(limit) as LogRow[];
 }
 
-/** Latest rug check of every token COWBOT considered (blocked first). */
+/** Latest rug check of every token GodsEye considered (blocked first). */
 export function getRugChecks(d: DB): RugCheckEntry[] {
   const rows = d.prepare("SELECT * FROM rug_checks ORDER BY verdict = 'pass', checked_at DESC LIMIT 60").all() as (Omit<RugCheckEntry, "blocks" | "warnings"> & { blocks: string; warnings: string })[];
   return rows.map((r) => ({ ...r, blocks: JSON.parse(r.blocks) as string[], warnings: JSON.parse(r.warnings) as string[] }));
@@ -249,5 +284,6 @@ export function buildDashboardSnapshot(d: DB): Record<string, unknown> {
     proof: getProof(d, SNAPSHOT_PROOF_ENTRIES, 0),
     logs: getLogs(d, 40),
     rugchecks: getRugChecks(d),
+    live: getLiveWallets(d, { sort: "pnl", limit: 2000 }),
   };
 }

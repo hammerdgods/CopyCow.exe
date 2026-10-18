@@ -8,7 +8,7 @@ export async function GET() {
   const notSetUp = missingHostedSetup();
   if (notSetUp) return notSetUp;
   if (hosted()) return feed("copies");
-  // Local: read COWBOT's database directly (loaded only here, never on Vercel).
+  // Local: read GodsEye's database directly (loaded only here, never on Vercel).
   const { getCopies } = await import("@/lib/queries");
   return NextResponse.json(getCopies());
 }

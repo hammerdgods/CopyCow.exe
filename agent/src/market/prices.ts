@@ -2,7 +2,7 @@
  * "What's the price right now?" — asks Jupiter first, then Birdeye (if you
  * have a key), then GeckoTerminal. First good answer wins.
  */
-import { SOL_MINT } from "@copycow/shared";
+import { SOL_MINT } from "@godseye/shared";
 import { birdeyePrices } from "./birdeye";
 import { fetchTokenPools } from "./geckoterminal";
 import { jupiterPrices, type JupPrice } from "./jupiter";

@@ -7,7 +7,7 @@
  * SOL on one side, exactly one other token on the other); token-to-token
  * swaps and SOL ↔ USDC/USDT swaps are skipped so every P&L figure is in SOL.
  */
-import { SOL_MINT, USDC_MINT, USDT_MINT } from "@copycow/shared";
+import { SOL_MINT, USDC_MINT, USDT_MINT } from "@godseye/shared";
 import { JITO_TIP_ACCOUNTS, PLUMBING, VENUES, VENUE_RANK } from "./programs";
 
 /** Rent locked in a new token account (refunded when it's closed). Not part of the trade. */
@@ -16,7 +16,7 @@ const DUST_TOKENS = 1e-9;
 const STABLECOINS = new Set([USDC_MINT, USDT_MINT]);
 const MIN_SOL = 0.0001;
 
-/** The parts of an RPC "jsonParsed" transaction COWBOT reads (raw JSON: keys and program IDs are strings). */
+/** The parts of an RPC "jsonParsed" transaction GodsEye reads (raw JSON: keys and program IDs are strings). */
 export interface TxLike {
   slot: number;
   blockTime?: number | null;
@@ -182,7 +182,7 @@ export function findFunder(tx: TxLike, wallet: string): string | null {
 /**
  * Brand-new wallets this wallet funded in this transaction: accounts that had
  * 0 SOL before and received at least `minSol` while this wallet paid.
- * (How COWBOT notices a tracked trader moving to a fresh wallet.)
+ * (How GodsEye notices a tracked trader moving to a fresh wallet.)
  */
 export function findNewWalletsFunded(tx: TxLike, wallet: string, minSol: number): { address: string; sol: number }[] {
   const meta = tx.meta;

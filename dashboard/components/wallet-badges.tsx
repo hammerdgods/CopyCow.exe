@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { TIER_DESCRIPTIONS, TIER_LABELS } from "@copycow/shared/constants";
+import { TIER_DESCRIPTIONS, TIER_LABELS } from "@godseye/shared/constants";
 import type { Tier, WalletKind } from "@/lib/types";
 import { shortAddr, solscanAccount } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -36,7 +36,7 @@ export function KindBadge({ kind, score, className }: { kind: WalletKind; score:
   );
 }
 
-/** A wallet address: links to its COWBOT page, with a Solscan link beside it. */
+/** A wallet address: links to its GodsEye page, with a Solscan link beside it. */
 export function Addr({ address, n = 4, internal = true, className }: { address: string; n?: number; internal?: boolean; className?: string }) {
   return (
     <span className={cn("inline-flex items-center gap-1 font-mono", className)}>

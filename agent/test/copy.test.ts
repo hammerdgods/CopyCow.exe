@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ComputeBudgetProgram, Keypair, PublicKey, SystemProgram, TransactionInstruction, TransactionMessage, VersionedTransaction } from "@solana/web3.js";
-import { openDb, SOL_MINT } from "@copycow/shared";
+import { openDb, SOL_MINT } from "@godseye/shared";
 import type { ParsedSwap } from "../src/chain/parse";
 import type { Executor, Fill } from "../src/copy/executor";
 import { MINT } from "./helpers";
@@ -33,7 +33,7 @@ test("verify: a normal Jupiter swap passes", () => {
   assert.equal(staticCheck(tx, owner.publicKey, 1_000_000), null);
 });
 
-test("verify: refuses SOL sent anywhere but COWBOT's own wrapped-SOL account", () => {
+test("verify: refuses SOL sent anywhere but GodsEye's own wrapped-SOL account", () => {
   const thief = Keypair.generate().publicKey;
   const tx = build([SystemProgram.transfer({ fromPubkey: owner.publicKey, toPubkey: thief, lamports: 1e9 }), jupIx]);
   assert.match(staticCheck(tx, owner.publicKey, 1_000_000)!, /sends SOL to/);

@@ -1,5 +1,6 @@
 "use client";
 import { PageHeader } from "@/components/page-header";
+import { COPYING_LINKS, SubNav } from "@/components/nav";
 import { Window } from "@/components/window";
 import { Addr, KindBadge, TierBadge } from "@/components/wallet-badges";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -13,17 +14,16 @@ export default function LeadersPage() {
   const leaders = data?.leaders ?? [];
   return (
     <>
-      <PageHeader title="Who COWBOT Copies" kicker="the learning loop · re-weighted every 15 minutes" />
-      <Window title="RULES.TXT" icon="📜" className="mb-4">
-        <ul className="list-inside list-disc space-y-1 p-3 text-xs text-muted-foreground">
-          <li>Weight follows each wallet&apos;s realized profit over the last 7 days (60%) and 30 days (40%), scaled by its win rate and number of trades.</li>
-          <li>Losing money this week → weight 0, immediately. It comes back on its own once the wallet is profitable again.</li>
-          <li>COWBOT also learns from its own results: if copying a wallet lost COWBOT money over 14 days (late entries, slippage), it stops copying that wallet.</li>
-          <li>Only the top earners are copied, and weights add up to 100% of the copy budget{data?.budgetSol ? ` (${data.budgetSol} SOL)` : ""}.</li>
-        </ul>
-      </Window>
+      <PageHeader title="Copying" kicker="who it copies · re-weighted every 15 min">
+        <SubNav links={COPYING_LINKS} />
+      </PageHeader>
+      <p className="mb-3 text-xs text-muted-foreground">
+        Weight follows each wallet&apos;s profit over 7 days (60%) and 30 days (40%), scaled by win rate and number of trades. Losing this week → 0 at once.
+        If copying a wallet loses GodsEye money over 14 days, it stops copying it. Top earners only; weights add up to the copy budget
+        {data?.budgetSol ? ` (${data.budgetSol} SOL)` : ""}.
+      </p>
 
-      <Window title={`LEADERS.XLS — ${leaders.filter((l) => l.copy_weight > 0).length} copied`} icon="🎯" className="mb-4">
+      <Window title={`Leaders · ${leaders.filter((l) => l.copy_weight > 0).length} copied`} className="mb-3">
         <Table>
           <TableHeader>
             <TableRow>
@@ -34,7 +34,7 @@ export default function LeadersPage() {
               <TableHead className="text-right">Its 7d</TableHead>
               <TableHead className="text-right">Its 30d</TableHead>
               <TableHead className="text-right">Wins</TableHead>
-              <TableHead className="text-right">COWBOT&apos;s copy P&amp;L</TableHead>
+              <TableHead className="text-right">GodsEye&apos;s copy P&amp;L</TableHead>
               <TableHead>Active</TableHead>
               <TableHead>Why</TableHead>
             </TableRow>
@@ -72,7 +72,7 @@ export default function LeadersPage() {
         </Table>
       </Window>
 
-      <Window title="LEARNING.LOG — weight changes" icon="🧠">
+      <Window title="Weight changes">
         <div className="divide-y text-xs">
           {(data?.changes ?? []).length === 0 && <p className="p-4 text-muted-foreground">No changes yet.</p>}
           {(data?.changes ?? []).map((c) => (

@@ -1,4 +1,4 @@
-// Shapes of the dashboard's data feeds (used by the website and by COWBOT when publishing).
+// Shapes of the dashboard's data feeds (used by the website and by GodsEye when publishing).
 import type { Tier, WalletKind } from "./constants";
 
 export interface Summary {
@@ -25,6 +25,40 @@ export interface Summary {
   kindCounts: Record<WalletKind, number>;
   lastLearningAt: string | null;
   lastDiscoveryAt: string | null;
+  stream: {
+    enabled: boolean;
+    status: string | null;
+    lastAt: string | null;
+    txPerSec: number | null;
+    swapsPerSec: number | null;
+    walletsInMemory: number | null;
+    walletsSeen24h: number;
+    walletsSeenTotal: number;
+  };
+}
+
+/** A wallet seen on the live gRPC stream (running totals, not a full analysis). */
+export interface LiveWalletRow {
+  address: string;
+  first_seen_at: string;
+  last_seen_at: string;
+  swaps: number;
+  buys: number;
+  sells: number;
+  volume_sol: number;
+  live_pnl_sol: number;
+  live_closed: number;
+  live_wins: number;
+  live_kind: WalletKind;
+  live_ai_score: number | null;
+  promoted: number;
+  tier: Tier | null;
+}
+
+export interface LiveQuery {
+  sort?: "pnl" | "swaps" | "volume" | "recent";
+  kind?: WalletKind | "all";
+  limit?: number;
 }
 
 /** One row of the public wallet database. */

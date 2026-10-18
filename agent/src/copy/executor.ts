@@ -1,10 +1,10 @@
 /**
- * Executes COWBOT's copy trades.
- *   real  — Jupiter swap from COWBOT's wallet, checked (verify.ts) before signing
+ * Executes GodsEye's copy trades.
+ *   real  — Jupiter swap from GodsEye's wallet, checked (verify.ts) before signing
  *   paper — same Jupiter quote, nothing sent (for testing a setup)
  */
 import { PublicKey, VersionedTransaction, type Keypair } from "@solana/web3.js";
-import { LAMPORTS_PER_SOL, SOL_MINT } from "@copycow/shared";
+import { LAMPORTS_PER_SOL, SOL_MINT } from "@godseye/shared";
 import { config } from "../config";
 import { connection } from "../rpc";
 import { jupiterQuote, jupiterSwapTx, type JupQuote } from "../market/jupiter";
@@ -23,7 +23,7 @@ export interface Fill {
 export interface Executor {
   mode: "real" | "paper";
   buy(mint: string, sol: number): Promise<Fill>;
-  /** Sell `tokens` (or everything COWBOT holds of this token if `all`). */
+  /** Sell `tokens` (or everything GodsEye holds of this token if `all`). */
   sell(mint: string, tokens: number, all: boolean): Promise<Fill>;
 }
 
@@ -96,7 +96,7 @@ export class RealExecutor implements Executor {
 
   async sell(mint: string, tokens: number, all: boolean): Promise<Fill> {
     const held = await this.heldAtomic(mint);
-    if (held === 0n) throw new Error("COWBOT holds none of this token");
+    if (held === 0n) throw new Error("GodsEye holds none of this token");
     const dec = await decimalsOf(mint);
     const wanted = BigInt(Math.floor(tokens * 10 ** dec));
     const amount = all || wanted >= held ? held : wanted;

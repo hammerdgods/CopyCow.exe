@@ -1,5 +1,6 @@
 "use client";
 import { PageHeader } from "@/components/page-header";
+import { COPYING_LINKS, SubNav } from "@/components/nav";
 import { Window } from "@/components/window";
 import { Stat } from "@/components/stat";
 import { EquityChart, MonthlyChart, RollingWinRateChart } from "@/components/charts/perf-charts";
@@ -13,24 +14,26 @@ export default function PerformancePage() {
   const last = data?.equity.at(-1);
   return (
     <>
-      <PageHeader title="Performance" kicker="COWBOT's copy trades · closed positions only" />
-      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-        <Stat label="Equity" value={last ? `${last.equity.toFixed(2)}` : "—"} sub={`SOL · started ${data?.startingCapitalSol ?? "—"}`} />
-        <Stat label="Total return" value={pct(last && data ? (last.cumPnl / data.startingCapitalSol) * 100 : null)} valueClass={pnlClass(last?.cumPnl)} />
-        <Stat
+      <PageHeader title="Copying" kicker="performance · closed positions only">
+        <SubNav links={COPYING_LINKS} />
+      </PageHeader>
+      <div className="mb-3 grid grid-cols-2 gap-px border bg-border sm:grid-cols-3 lg:grid-cols-6">
+        <Stat className="border-0" label="Equity" value={last ? `${last.equity.toFixed(2)}` : "—"} sub={`SOL · started ${data?.startingCapitalSol ?? "—"}`} />
+        <Stat className="border-0" label="Total return" value={pct(last && data ? (last.cumPnl / data.startingCapitalSol) * 100 : null)} valueClass={pnlClass(last?.cumPnl)} />
+        <Stat className="border-0"
           label="Max drawdown"
           value={data ? `${data.drawdown.maxDrawdownPct.toFixed(2)}%` : "—"}
           sub={data?.drawdown.troughTs ? `trough ${dt(data.drawdown.troughTs).slice(0, 10)}` : "no drawdown yet"}
           valueClass={data && data.drawdown.maxDrawdownPct < 0 ? "text-loss" : ""}
         />
-        <Stat label="Current DD" value={data ? `${data.currentDrawdownPct.toFixed(2)}%` : "—"} valueClass={data && data.currentDrawdownPct < 0 ? "text-loss" : "text-win"} />
-        <Stat label="Avg win" value={pct(data?.avgWinPct ?? null, 2)} sub={`avg loss ${pct(data?.avgLossPct ?? null, 2)}`} valueClass="text-win" />
-        <Stat label="Profit factor" value={data?.profitFactor ? data.profitFactor.toFixed(2) : "—"} sub="gross win ÷ gross loss" />
+        <Stat className="border-0" label="Current DD" value={data ? `${data.currentDrawdownPct.toFixed(2)}%` : "—"} valueClass={data && data.currentDrawdownPct < 0 ? "text-loss" : "text-win"} />
+        <Stat className="border-0" label="Avg win" value={pct(data?.avgWinPct ?? null, 2)} sub={`avg loss ${pct(data?.avgLossPct ?? null, 2)}`} valueClass="text-win" />
+        <Stat className="border-0" label="Profit factor" value={data?.profitFactor ? data.profitFactor.toFixed(2) : "—"} sub="gross win ÷ gross loss" />
       </div>
 
       {/* Drawdown meter */}
       {data && (
-        <Window title="DRAWDOWN.METER" icon="📉" className="mb-4">
+        <Window title="Drawdown" className="mb-3">
           <div className="p-4">
             <div className="flex justify-between text-[11px] text-muted-foreground">
               <span>0%</span>
@@ -46,14 +49,14 @@ export default function PerformancePage() {
         </Window>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Window title="EQUITY_CURVE.BMP" icon="📈" className="lg:col-span-2">
+      <div className="grid gap-3 lg:grid-cols-2">
+        <Window title="Equity" className="lg:col-span-2">
           <div className="p-2 sm:p-4">{empty ? <EmptyChart /> : <EquityChart data={data!} />}</div>
         </Window>
-        <Window title="WINRATE_30D.BMP" icon="🎯">
+        <Window title="30-day win rate">
           <div className="p-2 sm:p-4">{empty ? <EmptyChart /> : <RollingWinRateChart data={data!} />}</div>
         </Window>
-        <Window title="MONTHLY.BMP" icon="🗓">
+        <Window title="Monthly">
           <div className="p-2 sm:p-4">{empty ? <EmptyChart /> : <MonthlyChart data={data!} />}</div>
         </Window>
       </div>
@@ -62,5 +65,5 @@ export default function PerformancePage() {
 }
 
 function EmptyChart() {
-  return <p className="flex h-[200px] items-center justify-center text-sm text-muted-foreground">Charts appear after COWBOT closes its first copied positions.</p>;
+  return <p className="flex h-[200px] items-center justify-center text-sm text-muted-foreground">Charts appear after GodsEye closes its first copied positions.</p>;
 }

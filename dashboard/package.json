@@ -1,8 +1,8 @@
 {
-  "name": "@copycow/dashboard",
+  "name": "@godseye/dashboard",
   "version": "0.1.0",
   "private": true,
-  "description": "copycow.xyz — public dashboard for COWBOT (Next.js 14 + Tailwind + shadcn/ui). Reads the same SQLite DB the agent writes.",
+  "description": "GodsEye public dashboard (Next.js 14 + Tailwind). Reads the same SQLite DB the agent writes.",
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {
-    "@copycow/shared": "*",
+    "@godseye/shared": "*",
     "@radix-ui/react-slot": "^1.1.1",
     "better-sqlite3": "^12.4.1",
     "class-variance-authority": "^0.7.1",

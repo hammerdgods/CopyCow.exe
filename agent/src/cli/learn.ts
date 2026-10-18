@@ -1,5 +1,5 @@
-/** `npm run learn` — run the learning loop once and show who COWBOT would copy. */
-import { openDb } from "@copycow/shared";
+/** `npm run learn` — run the learning loop once and show who GodsEye would copy. */
+import { openDb } from "@godseye/shared";
 import { attachLogDb } from "../log";
 import { runLearning } from "../learning/loop";
 
