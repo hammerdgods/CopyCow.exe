@@ -13,7 +13,7 @@ export default function PerformancePage() {
   const last = data?.equity.at(-1);
   return (
     <>
-      <PageHeader title="Performance" kicker="paper account · closed trades only" />
+      <PageHeader title="Performance" kicker="COWBOT's copy trades · closed positions only" />
       <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
         <Stat label="Equity" value={last ? `${last.equity.toFixed(2)}` : "—"} sub={`SOL · started ${data?.startingCapitalSol ?? "—"}`} />
         <Stat label="Total return" value={pct(last && data ? (last.cumPnl / data.startingCapitalSol) * 100 : null)} valueClass={pnlClass(last?.cumPnl)} />
@@ -62,5 +62,5 @@ export default function PerformancePage() {
 }
 
 function EmptyChart() {
-  return <p className="flex h-[200px] items-center justify-center text-sm text-muted-foreground">Charts appear after COWBOT closes its first trades.</p>;
+  return <p className="flex h-[200px] items-center justify-center text-sm text-muted-foreground">Charts appear after COWBOT closes its first copied positions.</p>;
 }

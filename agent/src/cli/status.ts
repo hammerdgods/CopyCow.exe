@@ -1,21 +1,16 @@
 /** `npm run status` — a quick health check of COWBOT from the database. */
-import { airdropPreview, getMeta, HEARTBEAT_STALE_MINUTES, LAMPORTS_PER_SOL, openDb, owedToTeamLamports, pendingCoinRewards, winRate } from "@copycow/shared";
+import { getMeta, openDb } from "@copycow/shared";
+import { getSummary } from "@copycow/shared/dashboard-data";
 
 const db = openDb();
-const hb = getMeta(db, "heartbeat");
-const ageMin = hb ? (Date.now() - new Date(hb).getTime()) / 60_000 : Infinity;
-const live = ageMin < HEARTBEAT_STALE_MINUTES && getMeta(db, "agent_status") === "live";
-const closed = db.prepare("SELECT pnl_sol FROM trades WHERE status='closed' AND kind='momentum'").all() as { pnl_sol: number }[];
-const open = db.prepare("SELECT symbol, entry_price, last_price FROM trades WHERE status='open' AND kind='momentum'").all() as { symbol: string; entry_price: number; last_price: number }[];
-const launches = db.prepare("SELECT COUNT(*) n FROM trades WHERE status='open' AND kind='launch'").get() as { n: number };
-const wr = winRate(closed);
-console.log(`🐄 COWBOT is ${live ? "LIVE 🟢" : "OFFLINE 🔴"} (last heartbeat ${hb ?? "never"})`);
-console.log(`   Wallet: ${getMeta(db, "wallet_pubkey") ?? "not created yet (run npm run wallet)"}`);
-console.log(`   Closed trades: ${closed.length} · win rate ${wr === null ? "—" : wr.toFixed(1) + "%"} · P&L ${closed.reduce((s, t) => s + t.pnl_sol, 0).toFixed(4)} SOL`);
-console.log(`   Open: ${open.map((o) => `${o.symbol} ${(((o.last_price ?? o.entry_price) / o.entry_price - 1) * 100).toFixed(2)}%`).join(", ") || "none"}`);
-console.log(`   Launch buys still held: ${launches.n}`);
-console.log(`   Next $COPYCOW airdrop (all COWBOT profit): ${(airdropPreview(db, "paper").poolLamports / LAMPORTS_PER_SOL).toFixed(6)} SOL (paper)`);
-const coins = pendingCoinRewards(db, false);
-if (coins.length) console.log(`   Waiting for launched-coin holders: ${coins.map((c) => `$${c.ticker} ${(c.lamports / LAMPORTS_PER_SOL).toFixed(5)}`).join(", ")}`);
-const owed = owedToTeamLamports(db);
-if (owed > 0) console.log(`   ⚠️  Team share waiting to be sent: ${(owed / LAMPORTS_PER_SOL).toFixed(6)} SOL (check TEAM_WALLET)`);
+const s = getSummary(db);
+const wr = s.winRate;
+console.log(`🐄 COWBOT is ${s.live ? "LIVE 🟢" : "OFFLINE 🔴"} (last heartbeat ${s.heartbeat ?? "never"}) · copy mode ${s.copyMode.toUpperCase()}${s.paused ? " · PAUSED" : ""}`);
+console.log(`   Wallet: ${s.wallet.pubkey ?? "not created yet (run npm run wallet)"}${s.wallet.balanceSol !== null ? ` · ${s.wallet.balanceSol.toFixed(4)} SOL` : ""}`);
+console.log(`   Copy results: ${s.closedPositions} closed · win rate ${wr === null ? "—" : wr.toFixed(1) + "%"} · realized ${s.realizedPnlSol.toFixed(4)} SOL · open ${s.openPositions}/${s.maxPositions} (${s.unrealizedPnlSol.toFixed(4)} SOL unrealized)`);
+console.log(`   Wallet database: ${s.walletsTracked} wallets · copying ${s.leaders} · fresh in last 24h ${s.freshWallets24h}`);
+console.log(`   Tiers: ${Object.entries(s.tierCounts).map(([t, n]) => `${t.replace("_", " ")} ${n}`).join(" · ")}`);
+console.log(`   AI/bot ${s.kindCounts.ai} · human ${s.kindCounts.human} · undecided ${s.kindCounts.unknown}`);
+const leaders = db.prepare("SELECT address, copy_weight, weight_reason FROM wallets WHERE copy_weight > 0 ORDER BY copy_weight DESC LIMIT 10").all() as { address: string; copy_weight: number; weight_reason: string }[];
+for (const l of leaders) console.log(`     ${(l.copy_weight * 100).toFixed(0).padStart(3)}%  ${l.address}  ${l.weight_reason}`);
+console.log(`   Last discovery ${getMeta(db, "last_discovery_at") ?? "never"} · last learning ${getMeta(db, "last_learning_at") ?? "never"}`);

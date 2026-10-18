@@ -7,14 +7,20 @@
  *     COWBOT ──writes──▶ Turso (table dashboard_snapshot) ◀──reads── Vercel site
  * The website only needs a READ-ONLY Turso token.
  *
+ * Keys: one per feed ("summary", "wallets", …) plus one per wallet page
+ * ("wallet:<address>"), written whenever COWBOT re-analyzes that wallet.
+ *
  * Settings (both in .env for COWBOT, and in Vercel → Project → Environment Variables):
  *   TURSO_DATABASE_URL  e.g. libsql://copycow-yourname.turso.io
  *   TURSO_AUTH_TOKEN    full-access token for COWBOT, read-only token for Vercel
  */
 import { createClient, type Client } from "@libsql/client";
 
-export const SNAPSHOT_KEYS = ["summary", "positions", "trades", "performance", "launches", "airdrops", "proof", "logs", "rugchecks"] as const;
-export type SnapshotKey = (typeof SNAPSHOT_KEYS)[number];
+export const SNAPSHOT_KEYS = ["summary", "wallets", "groups", "leaders", "copies", "performance", "proof", "logs", "rugchecks"] as const;
+export type FeedKey = (typeof SNAPSHOT_KEYS)[number];
+export type SnapshotKey = FeedKey | `wallet:${string}`;
+
+export const walletKey = (address: string): SnapshotKey => `wallet:${address}`;
 
 export function snapshotStoreConfigured(): boolean {
   return !!process.env.TURSO_DATABASE_URL?.trim();
@@ -32,23 +38,22 @@ function store(): Client {
 }
 
 const CREATE = `CREATE TABLE IF NOT EXISTS dashboard_snapshot (key TEXT PRIMARY KEY, json TEXT NOT NULL, updated_at TEXT NOT NULL)`;
+const UPSERT = "INSERT INTO dashboard_snapshot (key, json, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET json = excluded.json, updated_at = excluded.updated_at";
 
-/** COWBOT: publish all feeds in one go. */
+/** COWBOT: publish many keys in one go. */
 export async function writeSnapshot(data: Record<string, unknown>): Promise<void> {
   const now = new Date().toISOString();
-  await store().batch(
-    [
-      CREATE,
-      ...Object.entries(data).map(([key, value]) => ({
-        sql: "INSERT INTO dashboard_snapshot (key, json, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET json = excluded.json, updated_at = excluded.updated_at",
-        args: [key, JSON.stringify(value), now],
-      })),
-    ],
-    "write",
-  );
+  const entries = Object.entries(data);
+  // Turso batches are best kept modest; wallet pages can be numerous.
+  for (let i = 0; i < Math.max(1, entries.length); i += 200) {
+    await store().batch(
+      [CREATE, ...entries.slice(i, i + 200).map(([key, value]) => ({ sql: UPSERT, args: [key, JSON.stringify(value), now] }))],
+      "write",
+    );
+  }
 }
 
-/** Website: read one feed. Returns null if COWBOT hasn't published it yet. */
+/** Website: read one key. Returns null if COWBOT hasn't published it yet. */
 export async function readSnapshot<T>(key: SnapshotKey): Promise<{ data: T; updatedAt: string } | null> {
   try {
     const res = await store().execute({ sql: "SELECT json, updated_at FROM dashboard_snapshot WHERE key = ?", args: [key] });

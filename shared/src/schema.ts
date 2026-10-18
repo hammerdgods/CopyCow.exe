@@ -1,6 +1,6 @@
 /**
  * The database layout. One SQLite file (data/copycow.db) is shared by the
- * agent (writes), the dashboard (reads) and the copytrade engine.
+ * agent (writes) and the dashboard (reads).
  * "CREATE TABLE IF NOT EXISTS" means it's safe to run every startup.
  */
 export const SCHEMA_SQL = /* sql */ `
@@ -9,17 +9,6 @@ CREATE TABLE IF NOT EXISTS agent_meta (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL,
   updated_at TEXT NOT NULL
-);
-
--- Rug checks on every token COWBOT considers trading (cached ~6h)
-CREATE TABLE IF NOT EXISTS rug_checks (
-  mint TEXT PRIMARY KEY,
-  symbol TEXT NOT NULL,
-  verdict TEXT NOT NULL CHECK (verdict IN ('pass','blocked')),
-  blocks TEXT NOT NULL,
-  warnings TEXT NOT NULL,
-  rugcheck_score REAL,
-  checked_at TEXT NOT NULL
 );
 
 -- COWBOT's diary (shown as the terminal feed on the dashboard)
@@ -31,57 +20,18 @@ CREATE TABLE IF NOT EXISTS agent_log (
 );
 CREATE INDEX IF NOT EXISTS idx_agent_log_ts ON agent_log(ts);
 
--- Prices COWBOT saw each cycle (used for momentum + charts)
-CREATE TABLE IF NOT EXISTS price_snapshots (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  mint TEXT NOT NULL,
+-- Rug checks on every token COWBOT considers buying (cached a few hours)
+CREATE TABLE IF NOT EXISTS rug_checks (
+  mint TEXT PRIMARY KEY,
   symbol TEXT NOT NULL,
-  price_usd REAL NOT NULL,
-  change_15m_pct REAL,
-  volume_24h_usd REAL,
-  liquidity_usd REAL,
-  source TEXT NOT NULL,
-  ts TEXT NOT NULL
+  verdict TEXT NOT NULL CHECK (verdict IN ('pass','blocked')),
+  blocks TEXT NOT NULL,
+  warnings TEXT NOT NULL,
+  rugcheck_score REAL,
+  checked_at TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_snap_mint_ts ON price_snapshots(mint, ts);
 
--- Every paper trade, open or closed
-CREATE TABLE IF NOT EXISTS trades (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  mint TEXT NOT NULL,
-  symbol TEXT NOT NULL,
-  side TEXT NOT NULL DEFAULT 'long',
-  -- momentum = a normal COWBOT trade · launch = COWBOT's first buy of a coin it launched
-  kind TEXT NOT NULL DEFAULT 'momentum',
-  launched_token_id INTEGER,
-  size_tokens REAL,
-  status TEXT NOT NULL CHECK (status IN ('open','closed')),
-  mode TEXT NOT NULL DEFAULT 'paper',
-  size_sol REAL NOT NULL,
-  size_usd REAL NOT NULL,
-  entry_price REAL NOT NULL,
-  entry_ts TEXT NOT NULL,
-  entry_reason TEXT,
-  entry_fill_source TEXT,
-  momentum_15m_pct REAL,
-  volume_pace REAL,
-  exit_price REAL,
-  exit_ts TEXT,
-  exit_reason TEXT,
-  exit_fill_source TEXT,
-  last_price REAL,
-  last_price_ts TEXT,
-  pnl_pct REAL,
-  pnl_sol REAL,
-  entry_proof_id INTEGER,
-  exit_proof_id INTEGER
-);
-CREATE INDEX IF NOT EXISTS idx_trades_status ON trades(status);
-CREATE INDEX IF NOT EXISTS idx_trades_exit_ts ON trades(exit_ts);
-
--- "We can't cheat" layer: a hash of every decision, written BEFORE it executes.
--- Each hash also covers the previous hash (a chain), so editing any old row
--- breaks every hash after it.
+-- Tamper-evident chain of every decision COWBOT makes (see proof.ts)
 CREATE TABLE IF NOT EXISTS proof_ledger (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   kind TEXT NOT NULL,
@@ -91,176 +41,170 @@ CREATE TABLE IF NOT EXISTS proof_ledger (
   committed_at TEXT NOT NULL
 );
 
--- Trend scanner: raw mention counts per term per scan
-CREATE TABLE IF NOT EXISTS trend_mentions (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  scan_id INTEGER NOT NULL,
-  term TEXT NOT NULL,
-  source TEXT NOT NULL,
-  count REAL NOT NULL,
-  ts TEXT NOT NULL
+-- Every wallet COWBOT has found and analyzed (the public wallet database)
+CREATE TABLE IF NOT EXISTS wallets (
+  address TEXT PRIMARY KEY,
+  first_seen_at TEXT NOT NULL,
+  -- how COWBOT found it: top_pool_trader · funded_by_tracked · manual
+  discovered_via TEXT NOT NULL,
+  discovered_detail TEXT,
+  -- when the wallet itself was created on Solana (its first transaction), if known
+  chain_created_at TEXT,
+  -- true if the history goes back further than COWBOT looked (age is a lower bound)
+  age_is_lower_bound INTEGER NOT NULL DEFAULT 0,
+  is_fresh INTEGER NOT NULL DEFAULT 0,
+  -- the wallet that sent this wallet its first SOL; wallets with the same funder form a group
+  funder TEXT,
+  tier TEXT NOT NULL DEFAULT 'unrated',
+  tier_reason TEXT,
+  tier_changed_at TEXT,
+  kind TEXT NOT NULL DEFAULT 'unknown',
+  ai_score REAL,
+  -- all transactions (not just swaps) per hour, measured on first look
+  tx_per_hour REAL,
+  kind_reasons TEXT NOT NULL DEFAULT '[]',
+  copy_weight REAL NOT NULL DEFAULT 0,
+  weight_reason TEXT,
+  last_analyzed_at TEXT,
+  last_activity_at TEXT,
+  -- newest signature COWBOT has read for this wallet (so it only reads new ones next time)
+  last_signature TEXT,
+  analyze_errors INTEGER NOT NULL DEFAULT 0
 );
-CREATE INDEX IF NOT EXISTS idx_mentions_term_ts ON trend_mentions(term, ts);
+CREATE INDEX IF NOT EXISTS idx_wallets_tier ON wallets(tier);
+CREATE INDEX IF NOT EXISTS idx_wallets_funder ON wallets(funder);
+CREATE INDEX IF NOT EXISTS idx_wallets_weight ON wallets(copy_weight);
+CREATE INDEX IF NOT EXISTS idx_wallets_analyzed ON wallets(last_analyzed_at);
 
-CREATE TABLE IF NOT EXISTS trend_scans (
+-- Every swap COWBOT has seen a tracked wallet make (SOL-priced)
+CREATE TABLE IF NOT EXISTS wallet_swaps (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  started_at TEXT NOT NULL,
-  finished_at TEXT,
-  sources TEXT NOT NULL,
-  terms_seen INTEGER NOT NULL DEFAULT 0,
-  qualified INTEGER NOT NULL DEFAULT 0,
-  notes TEXT
-);
-
--- Trends worth remembering (qualified ones + near misses)
-CREATE TABLE IF NOT EXISTS trends (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  scan_id INTEGER NOT NULL,
-  term TEXT NOT NULL,
-  score REAL NOT NULL,
-  mention_count REAL NOT NULL,
-  velocity_ratio REAL NOT NULL,
-  memeable INTEGER NOT NULL,
-  solana_adjacent INTEGER NOT NULL,
-  large_cap INTEGER NOT NULL,
-  qualified INTEGER NOT NULL,
-  sources TEXT NOT NULL,
-  sample_posts TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'logged',
-  status_reason TEXT,
-  detected_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_trends_detected ON trends(detected_at);
-
--- X (Twitter) API reads, so we never blow the free-tier monthly budget
-CREATE TABLE IF NOT EXISTS x_api_usage (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  ts TEXT NOT NULL,
-  endpoint TEXT NOT NULL,
-  posts_read INTEGER NOT NULL,
-  ok INTEGER NOT NULL,
-  note TEXT
-);
-
--- Tokens COWBOT launched (or WOULD have launched, in paper mode)
-CREATE TABLE IF NOT EXISTS launched_tokens (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  trend_id INTEGER,
-  trend_term TEXT NOT NULL,
-  name TEXT NOT NULL,
-  ticker TEXT NOT NULL,
-  description TEXT NOT NULL,
-  image_path TEXT,
-  mode TEXT NOT NULL CHECK (mode IN ('paper','real')),
-  status TEXT NOT NULL,
-  mint TEXT,
-  metadata_uri TEXT,
-  launch_buy_sol REAL NOT NULL,
-  tx_signature TEXT,
-  proof_id INTEGER,
-  launched_at TEXT NOT NULL,
-  error TEXT
-);
-
--- Money coming in.
---  copycow_reward: $COPYCOW's creator rewards → 10% COWBOT (agent_lamports) / 90% team (team_lamports)
---  launch_reward:  creator rewards of a coin COWBOT launched → 100% to THAT coin's holders (holder_lamports)
---  copytrade_fee:  copytrade performance fees → $COPYCOW holders' weekly airdrop (holder_lamports)
-CREATE TABLE IF NOT EXISTS fee_receipts (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  source_type TEXT NOT NULL CHECK (source_type IN ('copycow_reward','launch_reward','copytrade_fee')),
-  source_ref TEXT,
-  launched_token_id INTEGER,
-  amount_lamports INTEGER NOT NULL,
-  agent_lamports INTEGER NOT NULL,
-  team_lamports INTEGER NOT NULL,
-  holder_lamports INTEGER NOT NULL,
-  team_status TEXT NOT NULL,
-  team_tx_signature TEXT,
-  simulated INTEGER NOT NULL,
-  tx_signature TEXT,
-  note TEXT,
-  airdrop_epoch_id INTEGER,
-  received_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_fees_epoch ON fee_receipts(airdrop_epoch_id);
-
--- COWBOT's own capital (its 10% of $COPYCOW rewards, launch spending). Team money and holder money are never in here.
-CREATE TABLE IF NOT EXISTS treasury_ledger (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  ts TEXT NOT NULL,
-  kind TEXT NOT NULL,
-  amount_lamports INTEGER NOT NULL,
-  ref TEXT,
-  simulated INTEGER NOT NULL
-);
-
--- Weekly airdrops
-CREATE TABLE IF NOT EXISTS airdrop_epochs (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  epoch_index INTEGER NOT NULL,
-  -- cowbot_profit = weekly profit → $COPYCOW holders · coin_rewards = daily launched-coin rewards → that coin's holders
-  kind TEXT NOT NULL DEFAULT 'cowbot_profit',
-  token_mint TEXT,
-  launched_token_id INTEGER,
-  merkle_epoch INTEGER,
-  period_start TEXT,
-  period_end TEXT NOT NULL,
-  mode TEXT NOT NULL,
-  status TEXT NOT NULL,
-  pool_lamports INTEGER NOT NULL,
-  trading_pnl_lamports INTEGER NOT NULL DEFAULT 0,
-  copytrade_fees_lamports INTEGER NOT NULL DEFAULT 0,
-  total_lamports INTEGER NOT NULL,
-  wallets_paid INTEGER NOT NULL,
-  merkle_root TEXT,
-  snapshot_slot INTEGER,
-  tx_signatures TEXT NOT NULL DEFAULT '[]',
-  proof_id INTEGER,
-  notes TEXT,
-  created_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS airdrop_payouts (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  epoch_id INTEGER NOT NULL,
-  leaf_index INTEGER NOT NULL,
   wallet TEXT NOT NULL,
-  token_balance REAL NOT NULL,
-  amount_lamports INTEGER NOT NULL,
-  proof TEXT NOT NULL,
-  tx_signature TEXT,
-  status TEXT NOT NULL
+  signature TEXT NOT NULL,
+  slot INTEGER NOT NULL,
+  ts TEXT NOT NULL,
+  mint TEXT NOT NULL,
+  side TEXT NOT NULL CHECK (side IN ('buy','sell')),
+  token_amount REAL NOT NULL,
+  -- the wallet's token balance before this swap (used to copy partial sells)
+  token_balance_before REAL NOT NULL DEFAULT 0,
+  sol_amount REAL NOT NULL,
+  price_sol REAL NOT NULL,
+  venue TEXT,
+  jito_tip INTEGER NOT NULL DEFAULT 0,
+  fee_lamports INTEGER NOT NULL DEFAULT 0,
+  -- seconds since the token's first pool was created, if known
+  token_age_sec REAL,
+  UNIQUE (signature, wallet, mint)
+);
+CREATE INDEX IF NOT EXISTS idx_swaps_wallet_ts ON wallet_swaps(wallet, ts);
+CREATE INDEX IF NOT EXISTS idx_swaps_mint ON wallet_swaps(mint);
+
+-- Rolled-up performance per wallet (recomputed on every analysis)
+CREATE TABLE IF NOT EXISTS wallet_stats (
+  wallet TEXT PRIMARY KEY,
+  computed_at TEXT NOT NULL,
+  swaps_total INTEGER NOT NULL,
+  swaps_7d INTEGER NOT NULL,
+  swaps_30d INTEGER NOT NULL,
+  pnl_7d_sol REAL NOT NULL,
+  pnl_30d_sol REAL NOT NULL,
+  pnl_all_sol REAL NOT NULL,
+  closed_7d INTEGER NOT NULL,
+  closed_30d INTEGER NOT NULL,
+  wins_30d INTEGER NOT NULL,
+  win_rate_30d REAL,
+  best_trade_share REAL,
+  avg_buy_sol REAL,
+  avg_hold_minutes REAL,
+  early_buys INTEGER NOT NULL DEFAULT 0,
+  early_buy_rate REAL,
+  first_trade_at TEXT,
+  last_trade_at TEXT
 );
 
--- Copytrade subscribers (registered via the copytrade engine API)
-CREATE TABLE IF NOT EXISTS subscribers (
+-- Why a wallet got its tier (shown publicly on its page)
+CREATE TABLE IF NOT EXISTS wallet_evidence (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  wallet TEXT NOT NULL UNIQUE,
-  tier TEXT NOT NULL,
-  token_balance REAL NOT NULL,
-  balance_verified INTEGER NOT NULL,
-  max_size_sol REAL,
-  api_key TEXT,
+  wallet TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  detail TEXT NOT NULL,
+  mint TEXT,
+  signature TEXT,
+  ts TEXT NOT NULL,
+  UNIQUE (wallet, kind, mint, signature)
+);
+CREATE INDEX IF NOT EXISTS idx_evidence_wallet ON wallet_evidence(wallet);
+
+-- The learning loop's memory: every time a wallet's copy weight changes
+CREATE TABLE IF NOT EXISTS weight_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  wallet TEXT NOT NULL,
+  ts TEXT NOT NULL,
+  old_weight REAL NOT NULL,
+  new_weight REAL NOT NULL,
+  reason TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_weight_history_wallet ON weight_history(wallet, ts);
+
+-- Facts about tokens (symbol, decimals, launch time, creator), cached
+CREATE TABLE IF NOT EXISTS token_info (
+  mint TEXT PRIMARY KEY,
+  symbol TEXT,
+  decimals INTEGER,
+  pool_created_at TEXT,
+  creator TEXT,
+  checked_at TEXT NOT NULL
+);
+
+-- Every copy COWBOT made (or decided not to make)
+CREATE TABLE IF NOT EXISTS copy_trades (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  leader TEXT NOT NULL,
+  leader_signature TEXT NOT NULL,
+  leader_ts TEXT NOT NULL,
+  mint TEXT NOT NULL,
+  symbol TEXT,
+  side TEXT NOT NULL CHECK (side IN ('buy','sell')),
+  mode TEXT NOT NULL CHECK (mode IN ('real','paper')),
+  status TEXT NOT NULL CHECK (status IN ('pending','filled','failed','skipped')),
+  reason TEXT,
+  weight REAL,
+  size_sol REAL,
+  token_amount REAL,
+  price_sol REAL,
+  signature TEXT,
+  error TEXT,
+  position_id INTEGER,
+  latency_ms INTEGER,
+  proof_id INTEGER,
   created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
+  filled_at TEXT,
+  UNIQUE (leader_signature, mint)
 );
+CREATE INDEX IF NOT EXISTS idx_copy_trades_created ON copy_trades(created_at);
 
--- What the copytrade engine WOULD execute (paper) for each subscriber
-CREATE TABLE IF NOT EXISTS copy_executions (
+-- COWBOT's own positions, opened by copying a leader
+CREATE TABLE IF NOT EXISTS positions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  trade_id INTEGER NOT NULL,
-  subscriber_id INTEGER NOT NULL,
-  action TEXT NOT NULL CHECK (action IN ('buy','sell')),
-  tier TEXT NOT NULL,
-  queue_position INTEGER NOT NULL,
-  delay_ms INTEGER NOT NULL,
-  size_sol REAL NOT NULL,
-  instruction TEXT NOT NULL,
-  status TEXT NOT NULL,
+  mint TEXT NOT NULL,
+  symbol TEXT,
+  leader TEXT NOT NULL,
+  mode TEXT NOT NULL CHECK (mode IN ('real','paper')),
+  status TEXT NOT NULL CHECK (status IN ('open','closed')),
+  token_amount REAL NOT NULL,
+  tokens_bought REAL NOT NULL,
+  cost_sol REAL NOT NULL,
+  proceeds_sol REAL NOT NULL DEFAULT 0,
+  entry_price_sol REAL NOT NULL,
+  last_price_sol REAL,
+  last_price_ts TEXT,
+  opened_at TEXT NOT NULL,
+  closed_at TEXT,
+  exit_reason TEXT,
   pnl_sol REAL,
-  fee_lamports INTEGER,
-  created_at TEXT NOT NULL,
-  UNIQUE (trade_id, subscriber_id, action)
+  pnl_pct REAL
 );
+CREATE INDEX IF NOT EXISTS idx_positions_status ON positions(status);
+CREATE INDEX IF NOT EXISTS idx_positions_leader ON positions(leader);
 `;

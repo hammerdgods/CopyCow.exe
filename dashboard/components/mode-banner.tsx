@@ -2,25 +2,23 @@
 import { usePoll } from "@/lib/use-poll";
 import type { Summary } from "@/lib/types";
 
-/** Win95-style warning dialog that is always honest about paper/demo mode. */
+/** Always honest about whether real money is moving. */
 export function ModeBanner() {
   const { data } = usePoll<Summary>("/api/summary", 30_000);
   if (!data) return null;
-  if (data.demo) {
+  if (data.paused) {
     return (
       <div className="border border-amber/60 bg-amber/10 px-3 py-2 text-xs text-amber" role="status">
-        ⚠ DEMO DATA — this dashboard is showing sample numbers from data/demo.db, not COWBOT&apos;s real paper record.
+        ⏸ COPYING PAUSED — COWBOT isn&apos;t opening new positions. It still follows leaders&apos; sells and its own stop-losses.
       </div>
     );
   }
-  if (data.tradingMode === "paper") {
-    return (
-      <div className="flex items-center gap-2 border border-border bg-black/40 px-3 py-2 text-xs text-muted-foreground" role="status">
-        <span className="bevel-out bg-w95-gray px-1 font-bold text-black">!</span>
-        PAPER MODE — COWBOT trades simulated positions against live market prices. No real funds move.
-        {data.launchMode === "real" ? " Token launches are LIVE." : " Token launches are simulated too."}
-      </div>
-    );
-  }
-  return null;
+  return (
+    <div className="flex items-center gap-2 border border-border bg-black/40 px-3 py-2 text-xs text-muted-foreground" role="status">
+      <span className="bevel-out bg-w95-gray px-1 font-bold text-black">!</span>
+      {data.copyMode === "real"
+        ? "REAL MONEY — COWBOT copies trades with real SOL from its own wallet. Memecoins are extremely risky; past profit of any wallet says nothing about the future."
+        : "PAPER MODE — copy trades are simulated with live Jupiter quotes. No real funds move."}
+    </div>
+  );
 }

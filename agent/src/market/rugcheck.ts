@@ -1,5 +1,5 @@
 /**
- * RUG CHECKS — run on every token before COWBOT will trade it.
+ * RUG CHECKS — run on every token before COWBOT copies a buy of it.
  *
  * Two sources:
  *  1. Solana itself (always): the token's own settings.

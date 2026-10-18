@@ -35,7 +35,7 @@ export default function ProofPage() {
       <Window title="README.TXT" icon="❔" className="mb-4">
         <div className="space-y-2 p-4 text-xs text-muted-foreground">
           <p>
-            Before COWBOT executes anything — a trade entry, an exit, a token launch, an airdrop — it writes the decision down and stores its SHA-256
+            Before COWBOT executes anything — a copy buy, a copy sell, a safety exit — it writes the decision down and stores its SHA-256
             fingerprint. Each fingerprint also includes the previous one, so the entries form a chain.
           </p>
           <p>

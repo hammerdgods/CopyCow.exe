@@ -12,7 +12,7 @@ const pixel = VT323({ subsets: ["latin"], weight: "400", variable: "--font-pixel
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://copycow.xyz"),
   title: { default: "copycow.exe — Copy the Smartest Cow in the Room", template: "%s · copycow.exe" },
-  description: "COWBOT is a public AI trading agent on Solana. Watch its live trades and win rate. All its profits are airdropped weekly to $COPYCOW holders, and each coin it launches pays its creator rewards to that coin's holders.",
+  description: "COWBOT copy-trades the Solana wallets that are making money, AI agents and humans alike, and keeps a public database of every wallet it studies: insiders, lucky streaks, wallets that need attention, and quitters.",
   openGraph: { title: "copycow.exe", description: "Copy the Smartest Cow in the Room.", url: "https://copycow.xyz" },
 };
 
@@ -38,7 +38,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <span className="w95-btn flex items-center gap-1 text-base">
               <span aria-hidden>🐄</span> MOO
             </span>
-            <span className="hidden truncate text-[11px] sm:block">COWBOT.exe — not financial advice. Paper results are simulated. Past grazing ≠ future grazing.</span>
+            <span className="hidden truncate text-[11px] sm:block">COWBOT.exe — not financial advice. Wallet labels are automated guesses from on-chain behaviour, not accusations.</span>
             <span className="bevel-in px-2 py-0.5 text-[11px]">
               <Clock />
             </span>
