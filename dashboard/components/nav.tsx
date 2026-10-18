@@ -5,13 +5,12 @@ import { cn } from "@/lib/utils";
 
 export const NAV = [
   { href: "/", label: "Home" },
-  { href: "/live", label: "Live Trades" },
-  { href: "/history", label: "History" },
+  { href: "/wallets", label: "Wallet Database" },
+  { href: "/groups", label: "Fresh Wallets" },
+  { href: "/leaders", label: "Who COWBOT Copies" },
+  { href: "/copies", label: "Live Copies" },
   { href: "/performance", label: "Performance" },
-  { href: "/launches", label: "Launched Tokens" },
-  { href: "/airdrops", label: "Airdrops" },
   { href: "/proof", label: "Proof Ledger" },
-  { href: "/tiers", label: "Tiers" },
 ];
 
 export function Nav() {

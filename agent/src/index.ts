@@ -2,44 +2,47 @@
  * ╔══════════════════════════════════════════╗
  * ║  COWBOT.exe — the main agent loop         ║
  * ╚══════════════════════════════════════════╝
- * `npm run agent` starts everything on a schedule (all times UTC):
- *   every 5 min   trading cycle (paper)          CYCLE_CRON
- *   every 30 min  trend scan → maybe launch      SCAN_CRON
- *   every 30 min  creator-reward claim: 10% COWBOT / 90% team   FEE_POLL_CRON
- *   Mondays 00:05 weekly airdrop: ALL COWBOT profit → $COPYCOW holders   AIRDROP_CRON
- *   daily 00:20   launched-coin creator rewards → that coin's holders  COIN_AIRDROP_CRON
- *   daily 23:55   daily recap post               RECAP_CRON
- * `npm run cycle` runs ONE trading cycle and exits.
+ * `npm run agent` starts everything (schedules in UTC, all set in .env):
+ *   live          watch leaders' transactions and copy their swaps
+ *   every 30 s    poll leaders (safety net for the live feed)    LEADER_POLL_SECONDS
+ *   every minute  price positions, exit on stop/take/max hold    POSITION_CRON
+ *   every 10 min  analyze wallets: P&L, tier, AI or human        ANALYZE_CRON
+ *   every 15 min  learning loop: re-weight who to copy           LEARN_CRON
+ *   every 30 min  discover new wallets in the busiest pools      DISCOVER_CRON
  */
 import cron from "node-cron";
-import { openDb, setMeta } from "@copycow/shared";
+import { nowIso, openDb, setMeta } from "@copycow/shared";
+import { snapshotStoreConfigured } from "@copycow/shared/snapshot-store";
 import { config } from "./config";
 import { attachLogDb, say } from "./log";
-import { runTradingCycle, heartbeat } from "./trading/cycle";
-import { runTrendScan } from "./trend-scanner/scanner";
-import { considerLaunches } from "./token-launcher/launcher";
-import { pollFees } from "./fees/tracker";
-import { runCoinAirdrops, runOverdueAirdrops, runWeeklyAirdrops } from "./airdrop/epoch";
-import { resumeAirdrops } from "./airdrop/onchain";
-import { writeDailyRecap } from "./recap/daily";
+import { runDiscovery } from "./discovery/discover";
+import { runAnalysis } from "./analysis/analyze";
+import { currentLeaders, runLearning } from "./learning/loop";
+import { CopyEngine, isPaused } from "./copy/engine";
+import { PaperExecutor, RealExecutor } from "./copy/executor";
+import { LeaderWatcher } from "./copy/watcher";
 import { loadOrCreateWallet } from "./wallet/wallet";
 import { publishSnapshot } from "./publish/snapshot";
-import { snapshotStoreConfigured } from "@copycow/shared/snapshot-store";
 
 const db = openDb();
 attachLogDb(db);
 
-const BANNER = `
-   ^__^
-   (oo)\\_______        C:\\> COWBOT.EXE
-   (__)\\       )\\/\\     Copy the Smartest Cow in the Room
-       ||----w |        trading: PAPER · launches: ${config.launchMode.toUpperCase()}
-       ||     ||
-`;
+const { keypair, created } = loadOrCreateWallet(db);
+const engine = new CopyEngine(db, config.copyMode === "real" ? new RealExecutor(keypair) : new PaperExecutor(), keypair.publicKey);
+const watcher = new LeaderWatcher(db, engine);
+
+function heartbeat(status = "live"): void {
+  setMeta(db, "heartbeat", nowIso());
+  setMeta(db, "agent_status", status);
+  setMeta(db, "copy_mode", config.copyMode);
+  setMeta(db, "copy_paused_effective", isPaused(db) ? "1" : "0");
+  setMeta(db, "max_positions", config.maxPositions);
+  setMeta(db, "copy_budget_sol", config.copyBudgetSol);
+}
 
 /** Runs a job unless the previous run of the same job is still going. */
 const running = new Set<string>();
-async function job(name: string, fn: () => Promise<void>): Promise<void> {
+async function job(name: string, fn: () => Promise<void>, publish = true): Promise<void> {
   if (running.has(name)) return;
   running.add(name);
   try {
@@ -49,74 +52,63 @@ async function job(name: string, fn: () => Promise<void>): Promise<void> {
   } finally {
     running.delete(name);
   }
-  // Keep the hosted website (Vercel) in sync after every job.
-  await publishSnapshot(db, { force: name !== "trading cycle" });
+  if (publish) await publishSnapshot(db);
 }
 
-const tradingCycle = () => job("trading cycle", () => runTradingCycle(db));
-const trendScan = () =>
-  job("trend scan", async () => {
-    const r = await runTrendScan(db);
-    await considerLaunches(db, r.launchCandidates);
+const discover = () => job("discovery", async () => void (await runDiscovery(db)));
+const analyze = () => job("analysis", async () => void (await runAnalysis(db)));
+const learn = () =>
+  job("learning", async () => {
+    const leaders = runLearning(db);
+    await watcher.sync(leaders);
   });
-const feePoll = () =>
-  job("reward check", async () => {
-    await pollFees(db);
-    // A real airdrop that hit a snag gets retried every 30 min, not next week.
-    if (config.launchMode === "real" || config.network === "devnet") await resumeAirdrops(db);
+const positions = () =>
+  job("positions", async () => {
+    heartbeat();
+    await engine.managePositions();
   });
-const airdrop = () => job("weekly airdrop", () => runWeeklyAirdrops(db));
-const coinAirdrop = () => job("coin airdrops", () => runCoinAirdrops(db));
-const recap = () =>
-  job("daily recap", async () => {
-    const { file } = writeDailyRecap(db);
-    say("info", `Daily report written to ${file}`);
-  });
+const poll = () => job("leader poll", () => watcher.poll(), false);
+
+const BANNER = `
+   ^__^
+   (oo)\\_______        C:\\> COWBOT.EXE
+   (__)\\       )\\/\\     Copies the wallets that are making money
+       ||----w |        copy mode: ${config.copyMode.toUpperCase()}
+       ||     ||
+`;
 
 async function main() {
-  const { keypair, created } = loadOrCreateWallet(db);
-  if (process.argv.includes("--once")) {
-    await runTradingCycle(db);
-    await publishSnapshot(db, { force: true });
-    return;
-  }
   console.log(BANNER);
+  heartbeat();
   say("info", `Waking up. Agent wallet ${keypair.publicKey.toBase58()}${created ? " (just created — back up data/wallet/!)" : ""}.`);
-  if (config.launchMode === "real") {
-    say("warn", "LAUNCH_MODE=real — launches, launch-buy sales, reward claims and holder airdrops use REAL SOL. Momentum trading stays paper.");
-    if (config.copycowMint && !config.teamWallet) say("warn", "TODO: set TEAM_WALLET in .env — COWBOT won't claim creator rewards until it knows where the team's 90% of $COPYCOW rewards goes.");
-  }
-  else if (config.network === "devnet") say("info", "DEVNET mode: wallet, contract and airdrops run on Solana's free test network (test SOL). Trading + launches stay paper. Moo.");
-  else say("info", "Everything is PAPER. No real funds will move. Moo.");
-  if (config.launchModeDowngraded) say("warn", "LAUNCH_MODE=real is ignored on devnet (pump.fun only exists on mainnet) — launches stay paper.");
-  if (!config.heliusApiKey && !config.solanaRpcUrl) say("info", "TODO: add HELIUS_API_KEY to .env for a faster, more reliable Solana connection (using the public RPC for now).");
+  if (config.copyMode === "real") {
+    say("warn", `COPY_MODE=real — copy trades spend REAL SOL: up to ${config.copyMaxTradeSol} SOL per trade, ${config.copyBudgetSol} SOL in total, stop for the day after ${config.dailyLossLimitSol} SOL of losses. Pause any time with "npm run pause".`);
+  } else say("info", "COPY_MODE=paper — copy trades are simulated with live Jupiter quotes. No real funds move.");
+  if (!config.heliusApiKey && !config.solanaRpcUrl) say("warn", "TODO: add HELIUS_API_KEY (or SOLANA_RPC_URL) to .env. The public Solana RPC is slow, rate-limited and often refuses the history reads analysis needs.");
   if (snapshotStoreConfigured()) say("info", "Publishing dashboard data to Turso after every job (for the hosted website).");
-  if (!config.xBearerToken) say("info", "TODO: add X_BEARER_TOKEN to .env to scan X. Using free sources (DexScreener + GeckoTerminal) meanwhile.");
 
-  for (const [name, expr] of Object.entries({ CYCLE_CRON: config.cycleCron, SCAN_CRON: config.scanCron, FEE_POLL_CRON: config.feePollCron, AIRDROP_CRON: config.airdropCron, COIN_AIRDROP_CRON: config.coinAirdropCron, RECAP_CRON: config.recapCron })) {
+  for (const [name, expr] of Object.entries({ DISCOVER_CRON: config.discoverCron, ANALYZE_CRON: config.analyzeCron, LEARN_CRON: config.learnCron, POSITION_CRON: config.positionCron })) {
     if (!cron.validate(expr)) throw new Error(`${name}="${expr}" in .env is not a valid schedule`);
   }
   const opts = { timezone: "UTC" };
-  cron.schedule(config.cycleCron, tradingCycle, opts);
-  cron.schedule(config.scanCron, trendScan, opts);
-  cron.schedule(config.feePollCron, feePoll, opts);
-  cron.schedule(config.airdropCron, airdrop, opts);
-  cron.schedule(config.coinAirdropCron, coinAirdrop, opts);
-  // Hourly safety net: run any airdrop that was missed while this computer was off/asleep.
-  cron.schedule("7 * * * *", () => void job("airdrop catch-up", () => runOverdueAirdrops(db)), opts);
-  cron.schedule(config.recapCron, recap, opts);
+  cron.schedule(config.positionCron, positions, opts);
+  cron.schedule(config.analyzeCron, analyze, opts);
+  cron.schedule(config.learnCron, learn, opts);
+  cron.schedule(config.discoverCron, discover, opts);
+  setInterval(poll, Math.max(5, config.pollSeconds) * 1000);
 
-  // Start grazing right away instead of waiting for the first tick.
-  await tradingCycle();
-  setTimeout(() => void trendScan(), 20_000);
-  setTimeout(() => void feePoll(), 40_000);
-  setTimeout(() => void job("airdrop catch-up", () => runOverdueAirdrops(db)), 60_000);
+  // Resume copying whoever the last learning run picked, then get the pipeline going.
+  await watcher.sync(currentLeaders(db));
+  say("learn", `Watching ${watcher.watching.length} leader wallet${watcher.watching.length === 1 ? "" : "s"} live.`);
+  await positions();
+  await discover();
+  await analyze();
+  await learn();
 }
 
 function shutdown() {
   say("info", "Lying down for a nap (agent stopped).");
-  heartbeat(db, "stopped");
-  setMeta(db, "agent_status", "stopped");
+  heartbeat("stopped");
   db.close();
   process.exit(0);
 }
@@ -124,4 +116,3 @@ process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
 await main();
-if (process.argv.includes("--once")) db.close();

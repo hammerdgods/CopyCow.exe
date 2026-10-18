@@ -12,10 +12,4 @@ data/*
 dist/
 *.tsbuildinfo
 next-env.d.ts
-# Anchor / Rust
-contracts/target/
-contracts/.anchor/
-contracts/test-ledger/
-contracts/node_modules/
 .DS_Store
-contracts/keys/mainnet/

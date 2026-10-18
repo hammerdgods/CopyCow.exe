@@ -1,9 +1,9 @@
 /**
  * Jupiter — Solana's main swap router. Free "lite" API, no key needed
- * (an optional key from https://station.jup.ag/ / portal.jup.ag uses the pro host).
- *  - price():  current USD prices for many tokens at once
- *  - quote():  "if I swapped X for Y right now, what would I get?" —
- *              used to simulate realistic paper fills (incl. price impact)
+ * (an optional key from portal.jup.ag uses the pro host).
+ *  - jupiterPrices(): current USD prices for many tokens at once
+ *  - jupiterQuote():  "if I swapped X for Y right now, what would I get?"
+ *  - jupiterSwapTx(): an unsigned swap transaction for a quote (COWBOT checks it before signing)
  */
 import { config } from "../config";
 import { fetchJson } from "../http";
@@ -31,18 +31,37 @@ export async function jupiterPrices(mints: string[]): Promise<Map<string, JupPri
 }
 
 export interface JupQuote {
+  inputMint: string;
+  outputMint: string;
   inAmount: string;
   outAmount: string;
+  /** Minimum the swap may return after slippage. */
+  otherAmountThreshold: string;
   priceImpactPct: string;
   routePlan: { swapInfo: { label?: string } }[];
 }
 
-export async function jupiterQuote(
-  inputMint: string,
-  outputMint: string,
-  amountAtomic: bigint,
-  slippageBps = 50,
-): Promise<JupQuote> {
-  const url = `${host()}/swap/v1/quote?inputMint=${inputMint}&outputMint=${outputMint}&amount=${amountAtomic}&slippageBps=${slippageBps}`;
-  return fetchJson<JupQuote>(url, { headers: headers(), retries: 0 });
+export async function jupiterQuote(inputMint: string, outputMint: string, amountAtomic: bigint, slippageBps = 50): Promise<JupQuote> {
+  const url = `${host()}/swap/v1/quote?inputMint=${inputMint}&outputMint=${outputMint}&amount=${amountAtomic}&slippageBps=${slippageBps}&restrictIntermediateTokens=true`;
+  return fetchJson<JupQuote>(url, { headers: headers(), retries: 1 });
+}
+
+export interface JupSwapTx {
+  swapTransaction: string;
+  lastValidBlockHeight: number;
+}
+
+export async function jupiterSwapTx(quote: JupQuote, userPublicKey: string): Promise<JupSwapTx> {
+  return fetchJson<JupSwapTx>(`${host()}/swap/v1/swap`, {
+    method: "POST",
+    headers: { ...headers(), "content-type": "application/json" },
+    body: JSON.stringify({
+      quoteResponse: quote,
+      userPublicKey,
+      wrapAndUnwrapSol: true,
+      dynamicComputeUnitLimit: true,
+      prioritizationFeeLamports: { priorityLevelWithMaxLamports: { maxLamports: config.priorityFeeMaxLamports, priorityLevel: "veryHigh" } },
+    }),
+    retries: 1,
+  });
 }

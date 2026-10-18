@@ -1,61 +1,230 @@
 // Shapes of the dashboard's data feeds (used by the website and by COWBOT when publishing).
+import type { Tier, WalletKind } from "./constants";
 
 export interface Summary {
   live: boolean;
   heartbeat: string | null;
   agentStatus: string | null;
-  tradingMode: string;
-  launchMode: string;
-  /** Network COWBOT acts on: "mainnet" or "devnet" (test network). */
-  network: string;
-  demo: boolean;
+  copyMode: "real" | "paper";
+  paused: boolean;
   wallet: { pubkey: string | null; balanceSol: number | null; checkedAt: string | null };
-  winRate: number | null;
-  closedTrades: number;
+  closedPositions: number;
   wins: number;
   losses: number;
-  totalPnlSol: number;
+  winRate: number | null;
+  realizedPnlSol: number;
   todayPnlSol: number;
-  startingCapitalSol: number;
+  unrealizedPnlSol: number;
   openPositions: number;
-  /** Next weekly $COPYCOW airdrop = ALL COWBOT profit (trading + launch sales) since the last paid airdrop + copytrade fees. */
-  airdropPoolSol: number;
-  /** Profit since the last paid airdrop (negative = must be made back first). */
-  airdropPeriodPnlSol: number;
-  launchPnlSol: number;
-  /** $COPYCOW creator rewards and their 10/90 split. */
-  creatorRewardsSol: number;
-  agentShareSol: number;
-  teamShareSol: number;
-  /** Creator rewards of launched coins (100% for those coins' holders). */
-  coinRewardsSol: number;
-  tokensLaunched: number;
-  airdroppedSol: number;
-  nextAirdropAt: string;
-  cycleCount: number;
+  maxPositions: number;
+  copiesToday: number;
+  walletsTracked: number;
+  leaders: number;
+  freshWallets24h: number;
+  tierCounts: Record<Tier, number>;
+  kindCounts: Record<WalletKind, number>;
+  lastLearningAt: string | null;
+  lastDiscoveryAt: string | null;
 }
 
-export interface Trade {
+/** One row of the public wallet database. */
+export interface WalletRow {
+  address: string;
+  tier: Tier;
+  tier_reason: string | null;
+  tier_changed_at: string | null;
+  kind: WalletKind;
+  ai_score: number | null;
+  copy_weight: number;
+  is_fresh: number;
+  funder: string | null;
+  discovered_via: string;
+  first_seen_at: string;
+  chain_created_at: string | null;
+  age_is_lower_bound: number;
+  last_activity_at: string | null;
+  last_analyzed_at: string | null;
+  pnl_7d_sol: number | null;
+  pnl_30d_sol: number | null;
+  win_rate_30d: number | null;
+  closed_30d: number | null;
+  swaps_30d: number | null;
+  /** How many tracked wallets share this wallet's funder (including itself). */
+  group_size: number;
+}
+
+export interface WalletQuery {
+  q?: string;
+  tier?: Tier | "all";
+  kind?: WalletKind | "all";
+  fresh?: boolean;
+  copied?: boolean;
+  sort?: "pnl_30d" | "pnl_7d" | "weight" | "ai_score" | "last_activity" | "first_seen";
+  limit?: number;
+  offset?: number;
+}
+
+export interface WalletList {
+  rows: WalletRow[];
+  total: number;
+}
+
+export interface KindReason {
+  points: number;
+  reason: string;
+}
+
+export interface WalletStats {
+  swaps_total: number;
+  swaps_7d: number;
+  swaps_30d: number;
+  pnl_7d_sol: number;
+  pnl_30d_sol: number;
+  pnl_all_sol: number;
+  closed_7d: number;
+  closed_30d: number;
+  wins_30d: number;
+  win_rate_30d: number | null;
+  best_trade_share: number | null;
+  avg_buy_sol: number | null;
+  avg_hold_minutes: number | null;
+  early_buys: number;
+  early_buy_rate: number | null;
+  first_trade_at: string | null;
+  last_trade_at: string | null;
+  computed_at: string;
+}
+
+export interface Evidence {
   id: number;
-  kind: "momentum" | "launch";
+  kind: string;
+  detail: string;
+  mint: string | null;
+  signature: string | null;
+  ts: string;
+}
+
+export interface SwapRow {
+  id: number;
+  signature: string;
+  ts: string;
   mint: string;
-  symbol: string;
+  symbol: string | null;
+  side: "buy" | "sell";
+  token_amount: number;
+  sol_amount: number;
+  price_sol: number;
+  venue: string | null;
+  token_age_sec: number | null;
+}
+
+export interface WeightChange {
+  id: number;
+  wallet: string;
+  ts: string;
+  old_weight: number;
+  new_weight: number;
+  reason: string;
+}
+
+export interface CopyTrade {
+  id: number;
+  leader: string;
+  leader_signature: string;
+  leader_ts: string;
+  mint: string;
+  symbol: string | null;
+  side: "buy" | "sell";
+  mode: "real" | "paper";
+  status: "pending" | "filled" | "failed" | "skipped";
+  reason: string | null;
+  weight: number | null;
+  size_sol: number | null;
+  token_amount: number | null;
+  price_sol: number | null;
+  signature: string | null;
+  error: string | null;
+  position_id: number | null;
+  latency_ms: number | null;
+  created_at: string;
+  filled_at: string | null;
+  proof_hash?: string | null;
+}
+
+export interface Position {
+  id: number;
+  mint: string;
+  symbol: string | null;
+  leader: string;
+  mode: "real" | "paper";
   status: "open" | "closed";
-  size_sol: number;
-  size_usd: number;
-  entry_price: number;
-  entry_ts: string;
-  entry_reason: string | null;
-  exit_price: number | null;
-  exit_ts: string | null;
-  exit_reason: string | null;
-  last_price: number | null;
+  token_amount: number;
+  tokens_bought: number;
+  cost_sol: number;
+  proceeds_sol: number;
+  entry_price_sol: number;
+  last_price_sol: number | null;
   last_price_ts: string | null;
-  pnl_pct: number | null;
+  opened_at: string;
+  closed_at: string | null;
+  exit_reason: string | null;
   pnl_sol: number | null;
-  unrealized_pct?: number;
+  pnl_pct: number | null;
   unrealized_sol?: number;
-  entry_proof_hash?: string | null;
+  unrealized_pct?: number;
+}
+
+export interface WalletDetail {
+  wallet: WalletRow;
+  stats: WalletStats | null;
+  evidence: Evidence[];
+  kindReasons: KindReason[];
+  swaps: SwapRow[];
+  weightHistory: WeightChange[];
+  group: WalletRow[];
+  copies: CopyTrade[];
+  copyPnlSol: number;
+  copyClosed: number;
+}
+
+export interface WalletGroup {
+  funder: string;
+  funder_tier: Tier | null;
+  size: number;
+  ai: number;
+  human: number;
+  unknown: number;
+  fresh: number;
+  newest_at: string | null;
+  likely_exchange: boolean;
+  members: Pick<WalletRow, "address" | "tier" | "kind" | "ai_score" | "is_fresh" | "pnl_30d_sol" | "chain_created_at">[];
+}
+
+export interface Leader {
+  address: string;
+  tier: Tier;
+  kind: WalletKind;
+  copy_weight: number;
+  weight_reason: string | null;
+  pnl_7d_sol: number | null;
+  pnl_30d_sol: number | null;
+  win_rate_30d: number | null;
+  closed_30d: number | null;
+  copy_pnl_sol: number;
+  copy_closed: number;
+  last_activity_at: string | null;
+}
+
+export interface LeadersData {
+  leaders: Leader[];
+  changes: WeightChange[];
+  budgetSol: number;
+}
+
+export interface CopiesData {
+  open: Position[];
+  closed: Position[];
+  trades: CopyTrade[];
 }
 
 export interface Performance {
@@ -70,83 +239,7 @@ export interface Performance {
   profitFactor: number | null;
 }
 
-export interface LaunchedToken {
-  id: number;
-  trend_term: string;
-  name: string;
-  ticker: string;
-  mode: "paper" | "real";
-  status: string;
-  mint: string | null;
-  tx_signature: string | null;
-  launch_buy_sol: number;
-  launched_at: string;
-  trend_score: number | null;
-  fees_lamports: number;
-  airdropped_lamports: number;
-  launch_pnl_sol: number | null;
-  launch_status: string | null;
-  simulated_fees: number;
-}
-
-export interface Trend {
-  id: number;
-  term: string;
-  score: number;
-  mention_count: number;
-  velocity_ratio: number;
-  qualified: number;
-  status: string;
-  status_reason: string | null;
-  sources: string;
-  sample_posts: string;
-  detected_at: string;
-}
-
-export interface LaunchesData {
-  tokens: LaunchedToken[];
-  totals: {
-    coinRewardsSol: number; coinRewardsAirdroppedSol: number; launchPnlSol: number;
-    copycowRewardsSol: number; agentSol: number; teamSol: number; teamSentSol: number; copytradeFeesSol: number;
-  };
-  trends: Trend[];
-  launchMode: string;
-}
-
-export interface AirdropEpoch {
-  id: number;
-  epoch_index: number;
-  kind: "cowbot_profit" | "coin_rewards";
-  token_mint: string | null;
-  ticker: string | null;
-  merkle_epoch: number | null;
-  period_start: string | null;
-  period_end: string;
-  mode: string;
-  status: string;
-  pool_lamports: number;
-  trading_pnl_lamports: number;
-  copytrade_fees_lamports: number;
-  total_lamports: number;
-  wallets_paid: number;
-  merkle_root: string | null;
-  snapshot_slot: number | null;
-  tx_signatures: string;
-  notes: string | null;
-}
-
-export interface AirdropsData {
-  epochs: AirdropEpoch[];
-  pendingPoolSol: number;
-  network: string;
-  periodPnlSol: number;
-  copytradeFeesSol: number;
-  nextAirdropAt: string;
-  totalAirdroppedSol: number;
-  mintConfigured: boolean;
-}
-
-export interface ProofRow {
+export interface ProofEntryRow {
   id: number;
   kind: string;
   payload: string;
@@ -156,7 +249,7 @@ export interface ProofRow {
 }
 
 export interface ProofData {
-  entries: ProofRow[];
+  entries: ProofEntryRow[];
   total: number;
   chain: { ok: boolean; checked: number; brokenAtId?: number };
 }

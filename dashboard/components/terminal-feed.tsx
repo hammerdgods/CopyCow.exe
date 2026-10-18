@@ -10,8 +10,8 @@ const COLOR: Record<string, string> = {
   error: "text-loss",
   warn: "text-amber",
   trade: "text-cyan-300",
-  trend: "text-fuchsia-300",
-  launch: "text-fuchsia-300",
+  learn: "text-fuchsia-300",
+  wallet: "text-sky-300",
 };
 
 export function TerminalFeed({ limit = 14 }: { limit?: number }) {

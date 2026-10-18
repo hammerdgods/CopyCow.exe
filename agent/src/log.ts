@@ -4,7 +4,7 @@
  */
 import { type DB, nowIso } from "@copycow/shared";
 
-type Level = "info" | "trade" | "win" | "loss" | "warn" | "error" | "trend" | "launch" | "fee";
+type Level = "info" | "trade" | "win" | "loss" | "warn" | "error" | "learn" | "wallet";
 
 const COLORS: Record<Level, string> = {
   info: "\x1b[37m",
@@ -13,9 +13,8 @@ const COLORS: Record<Level, string> = {
   loss: "\x1b[31m",
   warn: "\x1b[33m",
   error: "\x1b[31m",
-  trend: "\x1b[35m",
-  launch: "\x1b[95m",
-  fee: "\x1b[92m",
+  learn: "\x1b[35m",
+  wallet: "\x1b[94m",
 };
 
 let db: DB | null = null;
@@ -36,7 +35,6 @@ export function say(level: Level, message: string): void {
   }
 }
 
-export const fmtUsd = (n: number): string =>
-  n >= 1 ? `$${n.toLocaleString("en-US", { maximumFractionDigits: 4 })}` : `$${n.toPrecision(4)}`;
 export const fmtPct = (n: number): string => `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`;
 export const fmtSol = (n: number): string => `${n >= 0 ? "+" : ""}${n.toFixed(4)} SOL`;
+export const short = (a: string): string => `${a.slice(0, 4)}…${a.slice(-4)}`;

@@ -1,150 +1,104 @@
 /**
  * All of COWBOT's settings, read from the .env file in the project root.
- * Every setting has a safe default, so the agent runs even with an empty .env.
+ * Every setting has a default, so the agent starts even with an empty .env.
  */
-import { envBool, envNum, envStr, loadEnv, HARD_MAX_LAUNCH_BUY_SOL } from "@copycow/shared";
+import { envBool, envNum, envStr, loadEnv, HARD_MAX_COPY_TRADE_SOL } from "@copycow/shared";
 
 loadEnv();
 
-/**
- * Which Solana network COWBOT ACTS on (wallet, contracts, airdrops):
- *   mainnet (default) — the real network
- *   devnet            — Solana's free test network (test SOL, real transactions)
- * Prices, trading signals and rug checks ALWAYS use mainnet market data.
- */
-const network = (envStr("SOLANA_NETWORK", "mainnet").toLowerCase() === "devnet" ? "devnet" : "mainnet") as "mainnet" | "devnet";
-const wantedLaunchMode = envStr("LAUNCH_MODE", "paper").toLowerCase() === "real" ? "real" : "paper";
-// pump.fun only exists on mainnet, so on devnet launches always stay paper.
-const launchMode = network === "devnet" ? "paper" : wantedLaunchMode;
+const list = (name: string) => envStr(name).split(",").map((s) => s.trim()).filter(Boolean);
 
 export const config = {
   // ---- Mode ----
-  /** "paper" (default) = simulate everything. "real" = real token launches, fee claims, airdrops. */
-  launchMode: launchMode as "paper" | "real",
-  network,
-  /** True when LAUNCH_MODE=real was asked for but ignored because we're on devnet. */
-  launchModeDowngraded: network === "devnet" && wantedLaunchMode === "real",
-  /** Devnet: cap each weekly test airdrop (test SOL is scarce). */
-  devnetAirdropMaxSol: envNum("DEVNET_AIRDROP_MAX_SOL", 1),
+  /** "real" (default) = copy trades spend real SOL from COWBOT's wallet. "paper" = simulate fills with Jupiter quotes. */
+  copyMode: (envStr("COPY_MODE", "real").toLowerCase() === "paper" ? "paper" : "real") as "real" | "paper",
 
-  // ---- API keys (all optional — COWBOT degrades gracefully) ----
+  // ---- API keys ----
   heliusApiKey: envStr("HELIUS_API_KEY"),
   solanaRpcUrl: envStr("SOLANA_RPC_URL"),
+  solanaWsUrl: envStr("SOLANA_WS_URL"),
   birdeyeApiKey: envStr("BIRDEYE_API_KEY"),
   jupiterApiKey: envStr("JUPITER_API_KEY"),
-  xBearerToken: envStr("X_BEARER_TOKEN"),
-  openaiApiKey: envStr("OPENAI_API_KEY"),
 
-  // ---- Trading strategy (always paper in this version) ----
-  cycleCron: envStr("CYCLE_CRON", "*/5 * * * *"),
-  universeSize: envNum("UNIVERSE_SIZE", 10),
-  momentumThresholdPct: envNum("MOMENTUM_15M_THRESHOLD_PCT", 1.0),
-  maxMomentumPct: envNum("MAX_MOMENTUM_15M_PCT", 8), // anything hotter = FOMO, skip
-  minVolumePace: envNum("MIN_VOLUME_PACE", 1.0),
-  minBuyPressure: envNum("MIN_BUY_PRESSURE", 0.5),
-  takeProfitPct: envNum("TAKE_PROFIT_PCT", 3),
-  stopLossPct: envNum("STOP_LOSS_PCT", 1.5),
-  maxPositions: envNum("MAX_POSITIONS", 3),
-  tradeSizeSol: envNum("TRADE_SIZE_SOL", 1),
-  maxHoldMinutes: envNum("MAX_HOLD_MINUTES", 240),
-  cooldownAfterLossMinutes: envNum("COOLDOWN_AFTER_LOSS_MINUTES", 120),
-  rutAfterConsecutiveLosses: envNum("RUT_AFTER_CONSECUTIVE_LOSSES", 3),
-  rutPauseMinutes: envNum("RUT_PAUSE_MINUTES", 60),
-  minLiquidityUsd: envNum("MIN_LIQUIDITY_USD", 250_000),
-  minUniqueBuyers24h: envNum("MIN_UNIQUE_BUYERS_24H", 300),
-  // Scam / wash-trading filters (fresh relaunches trading 30x their own size)
-  minPoolAgeHours: envNum("MIN_POOL_AGE_HOURS", 72),
-  minMarketCapUsd: envNum("MIN_MARKET_CAP_USD", 5_000_000),
-  maxVolumeToMarketCap: envNum("MAX_VOLUME_TO_MARKET_CAP", 3),
-  // Rug checks (see src/market/rugcheck.ts)
+  // ---- Discovery: finding wallets worth watching ----
+  discoverCron: envStr("DISCOVER_CRON", "*/30 * * * *"),
+  /** How many of Solana's busiest pools to read recent trades from. */
+  discoverPools: envNum("DISCOVER_POOLS", 12),
+  /** Only count trades at least this big (USD) when looking for traders. */
+  discoverMinTradeUsd: envNum("DISCOVER_MIN_TRADE_USD", 300),
+  /** Cap on brand-new wallets added per discovery run (keeps RPC usage sane). */
+  discoverMaxNewPerRun: envNum("DISCOVER_MAX_NEW_PER_RUN", 25),
+
+  // ---- Analysis: reading each wallet's history ----
+  analyzeCron: envStr("ANALYZE_CRON", "*/10 * * * *"),
+  analyzePerRun: envNum("ANALYZE_PER_RUN", 15),
+  /** How many past transactions to read the first time a wallet is analyzed. */
+  historyTxLimit: envNum("HISTORY_TX_LIMIT", 300),
+  /** Wallets younger than this many days count as "fresh". */
+  freshWalletDays: envNum("FRESH_WALLET_DAYS", 3),
+  /** Re-analyze a wallet at most this often (leaders are also updated live). */
+  reanalyzeMinutes: envNum("REANALYZE_MINUTES", 60),
+
+  // ---- Tiers (see src/analysis/tiers.ts) ----
+  quitAfterDays: envNum("QUIT_AFTER_DAYS", 7),
+  /** A buy within this many seconds of the token's first pool counts as "early". */
+  earlyBuySeconds: envNum("EARLY_BUY_SECONDS", 600),
+  minClosedForProven: envNum("MIN_CLOSED_FOR_PROVEN", 10),
+
+  // ---- Learning loop (see src/learning/weights.ts) ----
+  learnCron: envStr("LEARN_CRON", "*/15 * * * *"),
+  /** Copy at most this many wallets at once (the top earners). */
+  maxLeaders: envNum("COPY_MAX_LEADERS", 10),
+  /** Our own copies of a leader must not lose more than this (SOL) over the last 14 days, or the leader is dropped. */
+  copyLossDropSol: envNum("COPY_LOSS_DROP_SOL", 0.2),
+
+  // ---- Copy trading (real money by default) ----
+  /** Total SOL COWBOT may have in copy positions at once, shared out by weight. */
+  copyBudgetSol: envNum("COPY_BUDGET_SOL", 1),
+  copyMinTradeSol: envNum("COPY_MIN_TRADE_SOL", 0.01),
+  copyMaxTradeSol: Math.min(HARD_MAX_COPY_TRADE_SOL, envNum("COPY_MAX_TRADE_SOL", 0.1)),
+  maxPositions: envNum("COPY_MAX_POSITIONS", 5),
+  /** Stop copying for the rest of the UTC day once realized losses hit this. */
+  dailyLossLimitSol: envNum("COPY_DAILY_LOSS_LIMIT_SOL", 0.5),
+  /** Always keep this much SOL for fees. */
+  walletReserveSol: envNum("WALLET_RESERVE_SOL", 0.05),
+  /** Our own safety exits, even if the leader never sells. */
+  stopLossPct: envNum("COPY_STOP_LOSS_PCT", 35),
+  takeProfitPct: envNum("COPY_TAKE_PROFIT_PCT", 300),
+  maxHoldHours: envNum("COPY_MAX_HOLD_HOURS", 48),
+  /** Ignore a leader's trade if COWBOT sees it later than this (price has moved on). */
+  maxCopyDelaySeconds: envNum("COPY_MAX_DELAY_SECONDS", 60),
+  /** Don't copy buys that are smaller than this (SOL) — dust or tests. */
+  minLeaderBuySol: envNum("MIN_LEADER_BUY_SOL", 0.2),
+  slippageBps: envNum("COPY_SLIPPAGE_BPS", 300),
+  priorityFeeMaxLamports: envNum("PRIORITY_FEE_MAX_LAMPORTS", 1_000_000),
+  positionCron: envStr("POSITION_CRON", "* * * * *"),
+  /** Safety net for missed live events: re-read leaders' newest transactions this often. */
+  pollSeconds: envNum("LEADER_POLL_SECONDS", 30),
+
+  // ---- Rug checks (see src/market/rugcheck.ts) ----
   rugCheckEnabled: envBool("RUG_CHECK_ENABLED", true),
-  /** Block tokens whose creator can still mint more (normal for bridged coins → allowlist them). */
   rugBlockMintAuthority: envBool("RUG_BLOCK_MINT_AUTHORITY", true),
-  /** Block if RugCheck's overall risk score (0 safe … 100 risky) is at least this. */
   rugMaxRiskScore: envNum("RUG_MAX_RISK_SCORE", 75),
-  /** Token addresses you trust despite mint authority (e.g. bridged HYPE/ZEC), comma-separated. */
-  rugAllowlist: envStr("RUG_ALLOWLIST").split(",").map((s) => s.trim()).filter(Boolean),
+  rugAllowlist: list("RUG_ALLOWLIST"),
   rugCheckCacheHours: envNum("RUG_CHECK_CACHE_HOURS", 6),
-  paperSlippageBps: envNum("PAPER_SLIPPAGE_BPS", 30),
-  paperStartingCapitalSol: envNum("PAPER_STARTING_CAPITAL_SOL", 100),
-
-  // ---- Trend scanner ----
-  scanCron: envStr("SCAN_CRON", "*/30 * * * *"),
-  xMonthlyPostBudget: envNum("X_MONTHLY_POST_BUDGET", 100),
-  xPostsPerScan: Math.min(100, Math.max(10, envNum("X_POSTS_PER_SCAN", 10))),
-  xSearchQuery: envStr(
-    "X_SEARCH_QUERY",
-    '(solana OR pumpfun OR "pump.fun" OR from:pumpfun OR from:solana) (meme OR memecoin OR coin OR ca OR launch) -is:retweet lang:en',
-  ),
-  velocitySpikePct: envNum("VELOCITY_SPIKE_PCT", 500),
-  minMentions: envNum("TREND_MIN_MENTIONS", 3),
-  launchScoreThreshold: envNum("LAUNCH_SCORE_THRESHOLD", 75),
-  scannerWarmupHours: envNum("SCANNER_WARMUP_HOURS", 6),
-  largeCapFdvUsd: envNum("LARGE_CAP_FDV_USD", 50_000_000),
-
-  // ---- Token launcher ----
-  launchBuySol: Math.min(HARD_MAX_LAUNCH_BUY_SOL, envNum("LAUNCH_BUY_SOL", 0.5)),
-  launchTotalBudgetSol: envNum("LAUNCH_TOTAL_BUDGET_SOL", 5),
-  walletFloorSol: envNum("WALLET_FLOOR_SOL", 2),
-  paperTreasuryStartSol: envNum("PAPER_TREASURY_START_SOL", 10),
-  launchPriorityFeeSol: envNum("LAUNCH_PRIORITY_FEE_SOL", 0.0005),
-  launchSlippagePct: envNum("LAUNCH_SLIPPAGE_PCT", 10),
-  /** Sell COWBOT's launch buy when it's worth this many times what it cost… */
-  launchTakeProfitX: envNum("LAUNCH_TAKE_PROFIT_X", 2),
-  /** …or after this many hours, whichever comes first. */
-  launchMaxHoldHours: envNum("LAUNCH_MAX_HOLD_HOURS", 24),
-  tokenSocialX: envStr("TOKEN_SOCIAL_X", "https://x.com/copycowexe"),
-  tokenWebsite: envStr("TOKEN_WEBSITE", "https://copycow.xyz"),
-
-  // ---- Money split + airdrops ----
-  /** Receives 90% of every creator reward (marketing). Required before any real claim. */
-  teamWallet: envStr("TEAM_WALLET"),
-  /** Daily airdrop of each launched coin's creator rewards to that coin's holders. */
-  coinAirdropCron: envStr("COIN_AIRDROP_CRON", "20 0 * * *"),
-  /** Minimum tokens of a launched coin to receive its rewards airdrop. */
-  coinAirdropMinTokens: envNum("COIN_AIRDROP_MIN_TOKENS", 1),
-  feePollCron: envStr("FEE_POLL_CRON", "*/30 * * * *"),
-  creatorFeeBpsEstimate: envNum("CREATOR_FEE_BPS_ESTIMATE", 5),
-  paperFeeCapturePct: envNum("PAPER_FEE_CAPTURE_PCT", 2),
-  paperFeeSimDays: envNum("PAPER_FEE_SIM_DAYS", 7),
-  creatorFeeClaimMinSol: envNum("CREATOR_FEE_CLAIM_MIN_SOL", 0.01),
-  copycowMint: envStr("COPYCOW_MINT"),
-  airdropCron: envStr("AIRDROP_CRON", "5 0 * * 1"),
-  airdropMinTokens: envNum("AIRDROP_MIN_TOKENS", 100_000),
-  airdropMinPayoutSol: envNum("AIRDROP_MIN_PAYOUT_SOL", 0.001),
-  airdropExcludeWallets: envStr("AIRDROP_EXCLUDE_WALLETS")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean),
-  dividendProgramId: envStr("DIVIDEND_PROGRAM_ID"),
-
-  // ---- Daily recap ----
-  recapCron: envStr("RECAP_CRON", "55 23 * * *"),
 
   // ---- Misc ----
-  logToConsoleOnly: envBool("LOG_CONSOLE_ONLY", false),
+  /** Never track these wallets (exchanges, your own wallets…). */
+  ignoreWallets: list("IGNORE_WALLETS"),
 };
 
 export type Config = typeof config;
 
 /** Which Solana RPC to use: your own URL > Helius (free key) > public RPC. */
-/** The network COWBOT acts on (wallet, contracts, airdrops). */
 export function rpcUrl(): string {
   if (config.solanaRpcUrl) return config.solanaRpcUrl;
-  if (config.network === "devnet") {
-    return config.heliusApiKey ? `https://devnet.helius-rpc.com/?api-key=${config.heliusApiKey}` : "https://api.devnet.solana.com";
-  }
-  return mainnetRpcUrl();
-}
-
-/** Always mainnet: real tokens' settings for rug checks, decimals for quotes. */
-export function mainnetRpcUrl(): string {
-  const custom = envStr("MAINNET_RPC_URL") || (config.network === "mainnet" ? config.solanaRpcUrl : "");
-  if (custom) return custom;
   if (config.heliusApiKey) return `https://mainnet.helius-rpc.com/?api-key=${config.heliusApiKey}`;
   return "https://api.mainnet-beta.solana.com";
 }
 
-/** Solscan link for a transaction or account on the network COWBOT acts on. */
-export const solscan = (kind: "tx" | "account", id: string): string =>
-  `https://solscan.io/${kind}/${id}${config.network === "devnet" ? "?cluster=devnet" : ""}`;
+export function wsUrl(): string | undefined {
+  if (config.solanaWsUrl) return config.solanaWsUrl;
+  if (!config.solanaRpcUrl && config.heliusApiKey) return `wss://mainnet.helius-rpc.com/?api-key=${config.heliusApiKey}`;
+  return undefined; // web3.js derives it from the RPC URL
+}

@@ -1,5 +1,5 @@
 /**
- * PHASE 4 — COWBOT's own Solana wallet.
+ * COWBOT's own Solana wallet (the one that places copy trades).
  * Created automatically the first time the agent runs and saved to
  * data/wallet/cowbot-keypair.json (same format as the Solana CLI).
  *

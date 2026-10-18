@@ -1,11 +1,27 @@
 /**
- * GeckoTerminal — free, no API key. Gives us Solana's busiest trading
- * pools with price, % change (5m/15m/1h...), volume and liquidity.
- * Free limit is ~30 requests/minute; COWBOT uses ~3 per cycle.
+ * GeckoTerminal — free, no API key. Gives us Solana's busiest pools, the
+ * recent trades in each (who traded — that's how COWBOT finds wallets), and
+ * when each token's first pool was created.
+ * Free limit is ~30 requests/minute, so every call here is spaced out.
  */
 import { fetchJson } from "../http";
 
 const BASE = "https://api.geckoterminal.com/api/v2";
+const MIN_GAP_MS = 2_200;
+let queue: Promise<unknown> = Promise.resolve();
+let last = 0;
+
+/** All GeckoTerminal calls go through here, one at a time, ~27/minute max. */
+function gt<T>(path: string): Promise<T> {
+  const run = queue.then(async () => {
+    const wait = last + MIN_GAP_MS - Date.now();
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    last = Date.now();
+    return fetchJson<T>(`${BASE}${path}`, { retries: 2 });
+  });
+  queue = run.catch(() => undefined);
+  return run;
+}
 
 type Windowed = { m5?: string; m15?: string; m30?: string; h1?: string; h6?: string; h24?: string };
 
@@ -89,18 +105,15 @@ function toPoolInfo(p: GtPool): PoolInfo {
 export async function fetchTopPools(pages = 3): Promise<PoolInfo[]> {
   const out: PoolInfo[] = [];
   for (let page = 1; page <= pages; page++) {
-    const res = await fetchJson<{ data: GtPool[] }>(
-      `${BASE}/networks/solana/pools?sort=h24_volume_usd_desc&page=${page}`,
-      { retries: 2 },
-    );
+    const res = await gt<{ data: GtPool[] }>(`/networks/solana/pools?sort=h24_volume_usd_desc&page=${page}`);
     out.push(...res.data.map(toPoolInfo));
   }
   return out;
 }
 
-/** GeckoTerminal's "trending" Solana pools — used by the trend scanner. */
+/** GeckoTerminal's "trending" Solana pools. */
 export async function fetchTrendingPools(): Promise<PoolInfo[]> {
-  const res = await fetchJson<{ data: GtPool[] }>(`${BASE}/networks/solana/trending_pools?page=1`);
+  const res = await gt<{ data: GtPool[] }>(`/networks/solana/trending_pools?page=1`);
   return res.data.map(toPoolInfo);
 }
 
@@ -109,8 +122,8 @@ export async function fetchTokenPools(mints: string[]): Promise<Map<string, Pool
   const map = new Map<string, PoolInfo>();
   for (let i = 0; i < mints.length; i += 30) {
     const chunk = mints.slice(i, i + 30);
-    const res = await fetchJson<{ data: { id: string; attributes: { address: string; price_usd: string | null } }[] }>(
-      `${BASE}/networks/solana/tokens/multi/${chunk.join(",")}`,
+    const res = await gt<{ data: { id: string; attributes: { address: string; price_usd: string | null } }[] }>(
+      `/networks/solana/tokens/multi/${chunk.join(",")}`,
     );
     for (const t of res.data) {
       const price = num(t.attributes.price_usd);
@@ -134,4 +147,40 @@ export async function fetchTokenPools(mints: string[]): Promise<Map<string, Pool
     }
   }
   return map;
+}
+
+export interface PoolTrade {
+  wallet: string;
+  side: "buy" | "sell";
+  volumeUsd: number;
+  ts: string;
+  txHash: string;
+}
+
+/** The latest trades in a pool (up to 300), at least `minUsd` each. */
+export async function fetchPoolTrades(poolAddress: string, minUsd: number): Promise<PoolTrade[]> {
+  const res = await gt<{ data: { attributes: { tx_from_address: string; kind: string; volume_in_usd: string; block_timestamp: string; tx_hash: string } }[] }>(
+    `/networks/solana/pools/${poolAddress}/trades?trade_volume_in_usd_greater_than=${minUsd}`,
+  );
+  return res.data.map((t) => ({
+    wallet: t.attributes.tx_from_address,
+    side: t.attributes.kind === "sell" ? "sell" : "buy",
+    volumeUsd: num(t.attributes.volume_in_usd),
+    ts: t.attributes.block_timestamp,
+    txHash: t.attributes.tx_hash,
+  }));
+}
+
+/** When a token's first pool was created, and its symbol. */
+export async function fetchTokenLaunch(mint: string): Promise<{ symbol: string | null; poolCreatedAt: string | null }> {
+  const res = await gt<{ data: GtPool[] }>(`/networks/solana/tokens/${mint}/pools?page=1`);
+  let earliest: string | null = null;
+  let symbol: string | null = null;
+  for (const p of res.data) {
+    const info = toPoolInfo(p);
+    if (info.mint === mint && !symbol) symbol = info.symbol;
+    const created = p.attributes.pool_created_at;
+    if (created && (!earliest || created < earliest)) earliest = created;
+  }
+  return { symbol, poolCreatedAt: earliest };
 }
