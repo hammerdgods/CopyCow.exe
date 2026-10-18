@@ -1,5 +1,5 @@
 /**
- * RUG CHECKS — run on every token before COWBOT copies a buy of it.
+ * RUG CHECKS — run on every token before GodsEye copies a buy of it.
  *
  * Two sources:
  *  1. Solana itself (always): the token's own settings.
@@ -18,7 +18,7 @@
  *   • transfer hook · mutable metadata
  * If Solana can't be read, the token is skipped this cycle (fail closed).
  */
-import { type DB, nowIso, SOL_MINT } from "@copycow/shared";
+import { type DB, nowIso, SOL_MINT } from "@godseye/shared";
 import { config } from "../config";
 import { fetchJson } from "../http";
 import { rpcUrl } from "../config";

@@ -1,8 +1,9 @@
 "use client";
 import { Suspense, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { TIERS, TIER_DESCRIPTIONS, TIER_LABELS } from "@copycow/shared/constants";
+import { TIERS, TIER_DESCRIPTIONS, TIER_LABELS } from "@godseye/shared/constants";
 import { PageHeader } from "@/components/page-header";
+import { SubNav, WALLET_LINKS } from "@/components/nav";
 import { Window } from "@/components/window";
 import { Addr, KindBadge, TierBadge } from "@/components/wallet-badges";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -63,50 +64,45 @@ function WalletDatabase() {
 
   return (
     <>
-      <PageHeader title="Wallet Database" kicker={`${data?.total ?? "…"} wallets · public · updated live`}>
+      <PageHeader title="Wallets" kicker={`${data?.total ?? "…"} wallets · public`}>
+        <SubNav links={WALLET_LINKS} />
+      </PageHeader>
+
+      <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="search address or funder…"
           aria-label="Search wallets"
-          className="bevel-in w-full bg-black px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground sm:w-72"
+          className="bevel-in bg-black px-1.5 py-1 text-xs text-foreground w-full outline-none placeholder:text-muted-foreground sm:w-64"
         />
-      </PageHeader>
+        <select aria-label="Tier" value={tier} onChange={(e) => set({ tier: e.target.value })} className="bevel-in bg-black px-1.5 py-1 text-xs text-foreground" title={tier === "all" ? "" : TIER_DESCRIPTIONS[tier as (typeof TIERS)[number]]}>
+          <option value="all">All tiers</option>
+          {TIERS.map((t) => (
+            <option key={t} value={t}>
+              {TIER_LABELS[t]}
+            </option>
+          ))}
+        </select>
+        <select aria-label="AI or human" value={kind} onChange={(e) => set({ kind: e.target.value })} className="bevel-in bg-black px-1.5 py-1 text-xs text-foreground">
+          <option value="all">AI + human</option>
+          <option value="ai">AI / bot</option>
+          <option value="human">Human</option>
+          <option value="unknown">Undecided</option>
+        </select>
+        <select aria-label="Sort" value={sort} onChange={(e) => set({ sort: e.target.value })} className="bevel-in bg-black px-1.5 py-1 text-xs text-foreground">
+          {SORTS.map((o) => (
+            <option key={o.v} value={o.v}>
+              Sort: {o.label}
+            </option>
+          ))}
+        </select>
+        <label className="flex items-center gap-1.5 text-muted-foreground">
+          <input type="checkbox" checked={fresh} onChange={(e) => set({ fresh: e.target.checked ? "1" : null })} /> fresh only
+        </label>
+      </div>
 
-      <Window title="FILTERS.CFG" icon="⚙" className="mb-4">
-        <div className="flex flex-col gap-3 p-3 text-xs">
-          <div className="flex flex-wrap gap-1" role="group" aria-label="Tier">
-            {(["all", ...TIERS] as const).map((t) => (
-              <button key={t} onClick={() => set({ tier: t })} title={t === "all" ? "" : TIER_DESCRIPTIONS[t]} className={cn("px-2.5 py-1 uppercase tracking-widest", tier === t ? "bevel-in bg-black text-win" : "bevel-out bg-w95-gray text-black")}>
-                {t === "all" ? "All tiers" : TIER_LABELS[t]}
-              </button>
-            ))}
-          </div>
-          <div className="flex flex-wrap items-center gap-1">
-            {(["all", "ai", "human", "unknown"] as const).map((k) => (
-              <button key={k} onClick={() => set({ kind: k })} className={cn("px-2.5 py-1 uppercase tracking-widest", kind === k ? "bevel-in bg-black text-win" : "bevel-out bg-w95-gray text-black")}>
-                {k === "all" ? "AI + human" : k === "ai" ? "AI / bot" : k === "human" ? "Human" : "Undecided"}
-              </button>
-            ))}
-            <label className="ml-2 flex items-center gap-1.5 text-muted-foreground">
-              <input type="checkbox" checked={fresh} onChange={(e) => set({ fresh: e.target.checked ? "1" : null })} /> fresh wallets only
-            </label>
-            <label className="ml-auto flex items-center gap-1.5 text-muted-foreground">
-              sort
-              <select value={sort} onChange={(e) => set({ sort: e.target.value })} className="bevel-in bg-black px-1 py-0.5 text-foreground">
-                {SORTS.map((s) => (
-                  <option key={s.v} value={s.v}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          {tier !== "all" && <p className="text-muted-foreground">{TIER_DESCRIPTIONS[tier as (typeof TIERS)[number]]}</p>}
-        </div>
-      </Window>
-
-      <Window title="WALLETS.DBF" icon="🗂">
+      <Window title="Wallet database">
         <Table>
           <TableHeader>
             <TableRow>
@@ -174,7 +170,7 @@ function WalletDatabase() {
           </div>
         )}
         <p className="border-t px-3 py-2 text-[11px] text-muted-foreground">
-          P&amp;L is realized profit in SOL from swaps COWBOT has seen (SOL-priced only). Labels are automated reads of on-chain behaviour, not accusations.
+          P&amp;L is realized profit in SOL from swaps GodsEye has seen (SOL-priced only). Labels are automated reads of on-chain behaviour, not accusations.
           Each wallet&apos;s page lists the evidence behind its label.
         </p>
       </Window>

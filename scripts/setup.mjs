@@ -2,8 +2,8 @@
 import fs from "node:fs";
 if (!fs.existsSync(".env")) {
   fs.copyFileSync(".env.example", ".env");
-  console.log("🐄 Created .env from .env.example — open it and add HELIUS_API_KEY (and review the COPY_* money limits).");
+  console.log("Created .env from .env.example — open it and add HELIUS_API_KEY (and review the COPY_* money limits).");
 } else {
-  console.log("🐄 .env already exists — leaving it alone.");
+  console.log(".env already exists — leaving it alone.");
 }
 fs.mkdirSync("data", { recursive: true });

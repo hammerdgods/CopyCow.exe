@@ -1,5 +1,6 @@
 "use client";
 import { PageHeader } from "@/components/page-header";
+import { COPYING_LINKS, SubNav } from "@/components/nav";
 import { Window } from "@/components/window";
 import { RugChecks } from "@/components/rug-checks";
 import { Addr } from "@/components/wallet-badges";
@@ -18,11 +19,11 @@ export default function CopiesPage() {
   const totalU = open.reduce((s, p) => s + (p.unrealized_sol ?? 0), 0);
   return (
     <>
-      <PageHeader title="Live Copies" kicker="COWBOT's positions and every copy decision · auto-refresh 10s">
-        <p className="text-xs text-muted-foreground">{updatedAt ? `updated ${updatedAt.toISOString().slice(11, 19)} UTC` : "loading…"}</p>
+      <PageHeader title="Copying" kicker={updatedAt ? `positions · updated ${updatedAt.toISOString().slice(11, 19)} UTC` : "positions"}>
+        <SubNav links={COPYING_LINKS} />
       </PageHeader>
 
-      <Window title={`POSITIONS.XLS — ${open.length} open`} icon="📈" className="mb-4" right={<span className={cn("text-xs font-bold num", totalU >= 0 ? "text-win" : "text-loss")}>{signedSol(totalU)} SOL</span>}>
+      <Window title={`Open positions · ${open.length}`} className="mb-3" right={<span className={cn("text-xs font-bold num", totalU >= 0 ? "text-win" : "text-loss")}>{signedSol(totalU)} SOL</span>}>
         <Table>
           <TableHeader>
             <TableRow>
@@ -58,7 +59,7 @@ export default function CopiesPage() {
         </Table>
       </Window>
 
-      <Window title={`COPY_LOG.DBF — latest ${data?.trades.length ?? 0}`} icon="🗂" className="mb-4">
+      <Window title={`Copy decisions · latest ${data?.trades.length ?? 0}`} className="mb-3">
         <Table>
           <TableHeader>
             <TableRow>
@@ -104,7 +105,7 @@ export default function CopiesPage() {
         </Table>
       </Window>
 
-      <Window title={`CLOSED.XLS — ${data?.closed.length ?? 0}`} icon="✔" className="mb-4">
+      <Window title={`Closed · ${data?.closed.length ?? 0}`} className="mb-3">
         <Table>
           <TableHeader>
             <TableRow>

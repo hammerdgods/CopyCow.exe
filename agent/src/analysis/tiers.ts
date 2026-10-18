@@ -15,7 +15,7 @@
  *   • ≥ 2 times it sold out shortly before the token crashed ≥ 60%
  * Every rule that fires leaves a piece of evidence, shown on the wallet's page.
  */
-import type { Tier } from "@copycow/shared";
+import type { Tier } from "@godseye/shared";
 import type { ClosedPosition, ComputedStats } from "./pnl";
 
 export interface EvidenceItem {
@@ -32,7 +32,7 @@ export interface TierInput {
   now: number;
   isFresh: boolean;
   groupSize: number;
-  /** The funder is itself a wallet COWBOT tracks (possible wallet rotation). */
+  /** The funder is itself a wallet GodsEye tracks (possible wallet rotation). */
   funderTracked: { address: string; tier: Tier } | null;
   previousTier: Tier;
   /** Tokens this wallet bought where it is, or was funded by, the token's creator. */

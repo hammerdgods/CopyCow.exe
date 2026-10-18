@@ -1,21 +1,22 @@
 /**
- * Watches the wallets COWBOT copies, live.
+ * Watches the wallets GodsEye copies, live.
+ *   • with GRPC_URL set, leaders' swaps arrive on the gRPC stream (stream.ts)
  *   • a websocket subscription per leader (Solana "logsSubscribe") fires the
- *     moment a leader's transaction confirms
+ *     moment a leader's transaction confirms (and catches non-swap moves)
  *   • a poll every LEADER_POLL_SECONDS catches anything the websocket missed
  * Each new transaction is read once: swaps go to the copy engine; SOL sent to
  * a brand-new wallet adds that wallet to the database (possible rotation).
  */
 import { PublicKey } from "@solana/web3.js";
-import type { DB } from "@copycow/shared";
+import type { DB } from "@godseye/shared";
 import { connection } from "../rpc";
 import { say, short } from "../log";
 import { fetchParsedOne, fetchSignatures } from "../chain/history";
-import { findNewWalletsFunded, parseSwap } from "../chain/parse";
+import { findNewWalletsFunded, parseSwap, type TxLike } from "../chain/parse";
 import { addWallet } from "../discovery/discover";
 import type { CopyEngine } from "./engine";
 
-/** SOL sent to a never-used wallet that makes COWBOT start tracking it. */
+/** SOL sent to a never-used wallet that makes GodsEye start tracking it. */
 const ROTATION_MIN_SOL = 0.5;
 
 export class LeaderWatcher {
@@ -32,6 +33,15 @@ export class LeaderWatcher {
     return [...this.cursors.keys()];
   }
 
+  isWatching(address: string): boolean {
+    return this.cursors.has(address);
+  }
+
+  /** A leader's transaction that arrived on the live gRPC stream (already read, so no RPC call). */
+  async handleStreamed(leader: string, tx: TxLike, seenAt: number): Promise<void> {
+    await this.handle(leader, tx.transaction.signatures[0], seenAt, tx);
+  }
+
   /** Start watching new leaders, stop watching dropped ones. */
   async sync(leaders: string[]): Promise<void> {
     const want = new Set(leaders);
@@ -44,7 +54,7 @@ export class LeaderWatcher {
     }
     for (const addr of want) {
       if (this.cursors.has(addr)) continue;
-      // Start from "now": COWBOT copies new trades only, never old ones.
+      // Start from "now": GodsEye copies new trades only, never old ones.
       const newest = await fetchSignatures(addr, { limit: 1 }).catch(() => []);
       this.cursors.set(addr, newest[0]?.signature ?? null);
       try {
@@ -73,12 +83,12 @@ export class LeaderWatcher {
     }
   }
 
-  private async handle(leader: string, signature: string, seenAt: number): Promise<void> {
+  private async handle(leader: string, signature: string, seenAt: number, streamed?: TxLike): Promise<void> {
     const key = `${leader}:${signature}`;
     if (this.seen.has(key)) return;
     this.seen.add(key);
     if (this.seen.size > 20_000) this.seen = new Set([...this.seen].slice(-10_000));
-    const tx = await fetchParsedOne(signature);
+    const tx = streamed ?? (await fetchParsedOne(signature));
     if (!tx) return;
     const swap = parseSwap(tx, leader);
     if (swap) {

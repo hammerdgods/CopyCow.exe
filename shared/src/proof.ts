@@ -1,6 +1,6 @@
 /**
  * PROOF LEDGER — the "we can't cheat" layer.
- * Before COWBOT executes anything (trade, launch, airdrop) it writes the
+ * Before GodsEye executes anything (trade, launch, airdrop) it writes the
  * decision down and stores a SHA-256 fingerprint of it. Each fingerprint
  * also includes the previous one, forming a chain. Anyone can recompute:
  *     hash = sha256(prev_hash + "|" + payload)

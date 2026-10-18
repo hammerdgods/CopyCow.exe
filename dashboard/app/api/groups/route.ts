@@ -8,7 +8,7 @@ export async function GET() {
   const notSetUp = missingHostedSetup();
   if (notSetUp) return notSetUp;
   if (hosted()) return feed("groups");
-  // Local: read COWBOT's database directly (loaded only here, never on Vercel).
+  // Local: read GodsEye's database directly (loaded only here, never on Vercel).
   const { getWalletGroups } = await import("@/lib/queries");
   return NextResponse.json(getWalletGroups());
 }

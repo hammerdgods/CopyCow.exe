@@ -1,13 +1,13 @@
 /**
  * GeckoTerminal — free, no API key. Gives us Solana's busiest pools, the
- * recent trades in each (who traded — that's how COWBOT finds wallets), and
+ * recent trades in each (who traded — that's how GodsEye finds wallets), and
  * when each token's first pool was created.
- * Free limit is ~30 requests/minute, so every call here is spaced out.
+ * The free API rate-limits hard, so every call here is spaced out (~9/minute).
  */
 import { fetchJson } from "../http";
 
 const BASE = "https://api.geckoterminal.com/api/v2";
-const MIN_GAP_MS = 2_200;
+const MIN_GAP_MS = 6_500; // GeckoTerminal answers 429 well before its documented 30/min
 let queue: Promise<unknown> = Promise.resolve();
 let last = 0;
 

@@ -4,7 +4,7 @@
  *   creator (RugCheck)                                       → "did the creator fund this wallet?"
  *   decimals (Solana)                                        → reading swap amounts
  */
-import { type DB, nowIso } from "@copycow/shared";
+import { type DB, nowIso } from "@godseye/shared";
 import { fetchJson } from "../http";
 import { fetchTokenLaunch } from "./geckoterminal";
 import { tokenDecimals } from "./decimals";

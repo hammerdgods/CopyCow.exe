@@ -5,15 +5,15 @@ import { usePoll } from "@/lib/use-poll";
 import { ago } from "@/lib/format";
 import type { RugCheckEntry } from "@/lib/types";
 
-/** Every token COWBOT considered copying, and whether it passed the rug check. */
+/** Every token GodsEye considered copying, and whether it passed the rug check. */
 export function RugChecks() {
   const { data } = usePoll<RugCheckEntry[]>("/api/rugchecks", 60_000);
   const rows = data ?? [];
   const blocked = rows.filter((r) => r.verdict === "blocked").length;
   return (
-    <Window title={`RUG_CHECK.LOG — ${rows.length - blocked} passed · ${blocked} blocked`} icon="🛡" className="mt-4">
+    <Window title={`Rug checks · ${rows.length - blocked} passed · ${blocked} blocked`} className="mt-3">
       <p className="border-b px-3 py-2 text-[11px] text-muted-foreground">
-        Before copying a buy, COWBOT reads the token&apos;s settings on Solana and asks RugCheck. Blocked: creator can freeze wallets, take tokens, pause
+        Before copying a buy, GodsEye reads the token&apos;s settings on Solana and asks RugCheck. Blocked: creator can freeze wallets, take tokens, pause
         transfers or mint more, or a high RugCheck risk score. Warnings are shown but don&apos;t block.
       </p>
       <div className="divide-y">

@@ -1,6 +1,6 @@
 /** `npm run publish-dashboard` — push the dashboard data to Turso once (for checking your setup). */
-import { openDb } from "@copycow/shared";
-import { snapshotStoreConfigured } from "@copycow/shared/snapshot-store";
+import { openDb } from "@godseye/shared";
+import { snapshotStoreConfigured } from "@godseye/shared/snapshot-store";
 import "../config";
 import { publishSnapshot } from "./snapshot";
 
@@ -9,5 +9,5 @@ if (!snapshotStoreConfigured()) {
   process.exit(1);
 }
 const ok = await publishSnapshot(openDb(), { force: true });
-console.log(ok ? "🐄 Dashboard data published to Turso. Your Vercel site will show it within ~15 seconds." : "❌ Publishing failed (see the message above).");
+console.log(ok ? "Dashboard data published to Turso. Your Vercel site will show it within ~15 seconds." : "❌ Publishing failed (see the message above).");
 process.exit(ok ? 0 : 1);

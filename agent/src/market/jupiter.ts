@@ -3,7 +3,7 @@
  * (an optional key from portal.jup.ag uses the pro host).
  *  - jupiterPrices(): current USD prices for many tokens at once
  *  - jupiterQuote():  "if I swapped X for Y right now, what would I get?"
- *  - jupiterSwapTx(): an unsigned swap transaction for a quote (COWBOT checks it before signing)
+ *  - jupiterSwapTx(): an unsigned swap transaction for a quote (GodsEye checks it before signing)
  */
 import { config } from "../config";
 import { fetchJson } from "../http";

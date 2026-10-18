@@ -16,7 +16,7 @@ export function StatusBadge({ live, heartbeat, className }: { live: boolean; hea
         {live && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-win opacity-60" />}
         <span className={cn("relative inline-flex h-2.5 w-2.5 rounded-full", live ? "bg-win animate-pulsedot" : "bg-loss")} />
       </span>
-      {live ? "COWBOT is live" : "COWBOT offline"}
+      {live ? "GodsEye is live" : "GodsEye offline"}
       <span className="font-normal normal-case tracking-normal opacity-70">· {ago(heartbeat)}</span>
     </span>
   );

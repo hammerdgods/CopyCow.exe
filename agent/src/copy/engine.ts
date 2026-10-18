@@ -1,10 +1,10 @@
 /**
  * THE COPY ENGINE — reacts to a leader's swap.
  *
- * Leader buys  → COWBOT buys too, sized by the leader's weight from the
+ * Leader buys  → GodsEye buys too, sized by the leader's weight from the
  *                learning loop, after every safety check passes.
- * Leader sells → COWBOT sells the same share of its position (sold 50% → COWBOT sells 50%).
- * Every minute → COWBOT marks its positions to market and exits on its own
+ * Leader sells → GodsEye sells the same share of its position (sold 50% → GodsEye sells 50%).
+ * Every minute → GodsEye marks its positions to market and exits on its own
  *                stop-loss / take-profit / max-hold, in case a leader never sells
  *                (or moves its tokens to another wallet).
  *
@@ -16,7 +16,7 @@
  * Every decision is written to the proof ledger before it's executed.
  */
 import fs from "node:fs";
-import { commitProof, dataPath, type DB, getMeta, nowIso, setMeta, SOL_MINT } from "@copycow/shared";
+import { commitProof, dataPath, type DB, getMeta, nowIso, setMeta, SOL_MINT } from "@godseye/shared";
 import { config } from "../config";
 import { fmtPct, fmtSol, say, short } from "../log";
 import type { ParsedSwap } from "../chain/parse";

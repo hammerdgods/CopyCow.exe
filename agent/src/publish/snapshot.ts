@@ -1,12 +1,12 @@
 /**
  * Publishes the dashboard's data to Turso so the website can run on Vercel
  * (Vercel can't see this computer's database file). Skipped entirely unless
- * TURSO_DATABASE_URL is set. Never stops COWBOT if Turso is unreachable.
- * Wallet pages are published only when COWBOT re-analyzed that wallet.
+ * TURSO_DATABASE_URL is set. Never stops GodsEye if Turso is unreachable.
+ * Wallet pages are published only when GodsEye re-analyzed that wallet.
  */
-import { type DB } from "@copycow/shared";
-import { buildDashboardSnapshot, getWalletDetail } from "@copycow/shared/dashboard-data";
-import { snapshotStoreConfigured, walletKey, writeSnapshot } from "@copycow/shared/snapshot-store";
+import { type DB } from "@godseye/shared";
+import { buildDashboardSnapshot, getWalletDetail } from "@godseye/shared/dashboard-data";
+import { snapshotStoreConfigured, walletKey, writeSnapshot } from "@godseye/shared/snapshot-store";
 import { dirtyWallets } from "../analysis/analyze";
 import { say } from "../log";
 

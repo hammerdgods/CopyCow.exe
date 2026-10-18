@@ -1,5 +1,5 @@
 /**
- * The database layout. One SQLite file (data/copycow.db) is shared by the
+ * The database layout. One SQLite file (data/godseye.db) is shared by the
  * agent (writes) and the dashboard (reads).
  * "CREATE TABLE IF NOT EXISTS" means it's safe to run every startup.
  */
@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS agent_meta (
   updated_at TEXT NOT NULL
 );
 
--- COWBOT's diary (shown as the terminal feed on the dashboard)
+-- GodsEye's diary (shown as the terminal feed on the dashboard)
 CREATE TABLE IF NOT EXISTS agent_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   ts TEXT NOT NULL,
@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS agent_log (
 );
 CREATE INDEX IF NOT EXISTS idx_agent_log_ts ON agent_log(ts);
 
--- Rug checks on every token COWBOT considers buying (cached a few hours)
+-- Rug checks on every token GodsEye considers buying (cached a few hours)
 CREATE TABLE IF NOT EXISTS rug_checks (
   mint TEXT PRIMARY KEY,
   symbol TEXT NOT NULL,
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS rug_checks (
   checked_at TEXT NOT NULL
 );
 
--- Tamper-evident chain of every decision COWBOT makes (see proof.ts)
+-- Tamper-evident chain of every decision GodsEye makes (see proof.ts)
 CREATE TABLE IF NOT EXISTS proof_ledger (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   kind TEXT NOT NULL,
@@ -41,16 +41,16 @@ CREATE TABLE IF NOT EXISTS proof_ledger (
   committed_at TEXT NOT NULL
 );
 
--- Every wallet COWBOT has found and analyzed (the public wallet database)
+-- Every wallet GodsEye has found and analyzed (the public wallet database)
 CREATE TABLE IF NOT EXISTS wallets (
   address TEXT PRIMARY KEY,
   first_seen_at TEXT NOT NULL,
-  -- how COWBOT found it: top_pool_trader · funded_by_tracked · manual
+  -- how GodsEye found it: top_pool_trader · funded_by_tracked · manual
   discovered_via TEXT NOT NULL,
   discovered_detail TEXT,
   -- when the wallet itself was created on Solana (its first transaction), if known
   chain_created_at TEXT,
-  -- true if the history goes back further than COWBOT looked (age is a lower bound)
+  -- true if the history goes back further than GodsEye looked (age is a lower bound)
   age_is_lower_bound INTEGER NOT NULL DEFAULT 0,
   is_fresh INTEGER NOT NULL DEFAULT 0,
   -- the wallet that sent this wallet its first SOL; wallets with the same funder form a group
@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS wallets (
   weight_reason TEXT,
   last_analyzed_at TEXT,
   last_activity_at TEXT,
-  -- newest signature COWBOT has read for this wallet (so it only reads new ones next time)
+  -- newest signature GodsEye has read for this wallet (so it only reads new ones next time)
   last_signature TEXT,
   analyze_errors INTEGER NOT NULL DEFAULT 0
 );
@@ -76,7 +76,7 @@ CREATE INDEX IF NOT EXISTS idx_wallets_funder ON wallets(funder);
 CREATE INDEX IF NOT EXISTS idx_wallets_weight ON wallets(copy_weight);
 CREATE INDEX IF NOT EXISTS idx_wallets_analyzed ON wallets(last_analyzed_at);
 
--- Every swap COWBOT has seen a tracked wallet make (SOL-priced)
+-- Every swap GodsEye has seen a tracked wallet make (SOL-priced)
 CREATE TABLE IF NOT EXISTS wallet_swaps (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   wallet TEXT NOT NULL,
@@ -157,7 +157,7 @@ CREATE TABLE IF NOT EXISTS token_info (
   checked_at TEXT NOT NULL
 );
 
--- Every copy COWBOT made (or decided not to make)
+-- Every copy GodsEye made (or decided not to make)
 CREATE TABLE IF NOT EXISTS copy_trades (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   leader TEXT NOT NULL,
@@ -184,7 +184,7 @@ CREATE TABLE IF NOT EXISTS copy_trades (
 );
 CREATE INDEX IF NOT EXISTS idx_copy_trades_created ON copy_trades(created_at);
 
--- COWBOT's own positions, opened by copying a leader
+-- GodsEye's own positions, opened by copying a leader
 CREATE TABLE IF NOT EXISTS positions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   mint TEXT NOT NULL,
@@ -207,4 +207,24 @@ CREATE TABLE IF NOT EXISTS positions (
 );
 CREATE INDEX IF NOT EXISTS idx_positions_status ON positions(status);
 CREATE INDEX IF NOT EXISTS idx_positions_leader ON positions(leader);
+
+-- Every wallet seen swapping on the live gRPC stream (running totals; full swaps
+-- are only stored for wallets in the wallets table)
+CREATE TABLE IF NOT EXISTS wallet_activity (
+  address TEXT PRIMARY KEY,
+  first_seen_at TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+  swaps INTEGER NOT NULL,
+  buys INTEGER NOT NULL,
+  sells INTEGER NOT NULL,
+  volume_sol REAL NOT NULL,
+  live_pnl_sol REAL NOT NULL DEFAULT 0,
+  live_closed INTEGER NOT NULL DEFAULT 0,
+  live_wins INTEGER NOT NULL DEFAULT 0,
+  live_kind TEXT NOT NULL DEFAULT 'unknown',
+  live_ai_score REAL,
+  promoted INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_activity_last_seen ON wallet_activity(last_seen_at);
+CREATE INDEX IF NOT EXISTS idx_activity_pnl ON wallet_activity(live_pnl_sol);
 `;

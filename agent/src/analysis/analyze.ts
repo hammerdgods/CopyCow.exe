@@ -9,7 +9,7 @@
  *   5. gather evidence (creator links, sells right before a crash)
  *   6. assign a tier and an AI / human verdict, with reasons
  */
-import { type DB, nowIso, SOL_MINT, type Tier } from "@copycow/shared";
+import { type DB, nowIso, SOL_MINT, type Tier } from "@godseye/shared";
 import { config } from "../config";
 import { say, short } from "../log";
 import { readWalletHistory } from "../chain/history";
@@ -35,7 +35,7 @@ interface WalletRowDb {
 }
 
 /** How many token launch lookups one analysis run may make (GeckoTerminal is rate-limited). */
-const TOKEN_LOOKUPS_PER_RUN = 40;
+const TOKEN_LOOKUPS_PER_RUN = 20;
 const CREATOR_LOOKUPS_PER_WALLET = 5;
 
 export function insertSwaps(db: DB, swaps: ParsedSwap[]): number {

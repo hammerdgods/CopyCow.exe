@@ -1,6 +1,6 @@
 /**
  * ============================================================
- *  copycow.exe — constants shared by every part of the app
+ *  GodsEye — constants shared by every part of the app
  * ============================================================
  */
 
@@ -32,7 +32,7 @@ export const TIER_DESCRIPTIONS: Record<Tier, string> = {
   lucky_streak: "Profitable, but most of the profit came from one or two trades, or there are too few trades to call it skill.",
   needs_attention: "Something changed: a profitable wallet is now losing, a brand-new wallet is trading big, or it belongs to a large group of sibling wallets.",
   quitter: "Stopped trading.",
-  proven: "Profitable over many trades, with profit spread across them. These are the wallets COWBOT copies most.",
+  proven: "Profitable over many trades, with profit spread across them. These are the wallets GodsEye copies most.",
   unrated: "Not enough trades yet to judge.",
 };
 

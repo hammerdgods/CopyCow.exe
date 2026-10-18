@@ -12,5 +12,5 @@ export async function GET(_req: Request, { params }: { params: { address: string
   if (hosted()) return walletFeed(address);
   const { getWalletDetail } = await import("@/lib/queries");
   const d = getWalletDetail(address);
-  return d ? NextResponse.json(d) : NextResponse.json({ error: "COWBOT hasn't analyzed this wallet yet." }, { status: 404 });
+  return d ? NextResponse.json(d) : NextResponse.json({ error: "GodsEye hasn't analyzed this wallet yet." }, { status: 404 });
 }

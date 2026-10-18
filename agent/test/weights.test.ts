@@ -27,10 +27,10 @@ test("a leader that turns unprofitable is dropped immediately, even with a high 
   assert.equal(w.get("b")!.weight, 1);
 });
 
-test("COWBOT learns from its own copies: a winning wallet whose copies lose is dropped", () => {
+test("GodsEye learns from its own copies: a winning wallet whose copies lose is dropped", () => {
   const w = computeWeights([{ ...base, address: "uncopyable", pnl7: 20, copyPnl14: -0.5, copyClosed14: 4 }, { ...base, address: "ok" }], cfg);
   assert.equal(w.get("uncopyable")!.weight, 0);
-  assert.match(w.get("uncopyable")!.reason, /COWBOT's copies/);
+  assert.match(w.get("uncopyable")!.reason, /GodsEye's copies/);
 });
 
 test("only the top N earners are copied; quitters never", () => {

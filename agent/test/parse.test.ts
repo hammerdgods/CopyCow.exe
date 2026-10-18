@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { SOL_MINT } from "@copycow/shared";
+import { SOL_MINT } from "@godseye/shared";
 import { findFunder, findNewWalletsFunded, parseSwap, TOKEN_ACCOUNT_RENT_LAMPORTS } from "../src/chain/parse";
 import { JUP, MINT, PUMP, swapTx, tokenBal, WALLET } from "./helpers";
 

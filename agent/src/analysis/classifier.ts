@@ -7,8 +7,8 @@
  * in between → "unknown". On-chain, an AI agent and a scripted bot look the
  * same, so "ai" means "a program is pressing the buttons".
  */
-import type { WalletKind } from "@copycow/shared";
-import type { KindReason } from "@copycow/shared/dashboard-types";
+import type { WalletKind } from "@godseye/shared";
+import type { KindReason } from "@godseye/shared/dashboard-types";
 import type { SwapLite } from "./pnl";
 
 export const MIN_SWAPS_TO_CLASSIFY = 8;

@@ -1,4 +1,4 @@
-/** Small fetch helper: timeouts + a retry, so one flaky API doesn't stop COWBOT. */
+/** Small fetch helper: timeouts + a retry, so one flaky API doesn't stop GodsEye. */
 export async function fetchJson<T = unknown>(
   url: string,
   init: RequestInit & { timeoutMs?: number; retries?: number } = {},
@@ -10,7 +10,7 @@ export async function fetchJson<T = unknown>(
     try {
       const res = await fetch(url, {
         ...rest,
-        headers: { accept: "application/json", "user-agent": "copycow-cowbot/0.1", ...(rest.headers ?? {}) },
+        headers: { accept: "application/json", "user-agent": "godseye/0.1", ...(rest.headers ?? {}) },
         signal: AbortSignal.timeout(timeoutMs),
       });
       if (!res.ok) {

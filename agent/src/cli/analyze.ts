@@ -3,8 +3,8 @@
  * `npm run analyze -- <addr>`  — add a wallet (if new) and analyze it now
  */
 import { PublicKey } from "@solana/web3.js";
-import { openDb } from "@copycow/shared";
-import { getWalletDetail } from "@copycow/shared/dashboard-data";
+import { openDb } from "@godseye/shared";
+import { getWalletDetail } from "@godseye/shared/dashboard-data";
 import { attachLogDb } from "../log";
 import { analyzeWallet, runAnalysis } from "../analysis/analyze";
 import { addWallet } from "../discovery/discover";

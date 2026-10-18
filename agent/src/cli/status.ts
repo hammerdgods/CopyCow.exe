@@ -1,11 +1,11 @@
-/** `npm run status` — a quick health check of COWBOT from the database. */
-import { getMeta, openDb } from "@copycow/shared";
-import { getSummary } from "@copycow/shared/dashboard-data";
+/** `npm run status` — a quick health check of GodsEye from the database. */
+import { getMeta, openDb } from "@godseye/shared";
+import { getSummary } from "@godseye/shared/dashboard-data";
 
 const db = openDb();
 const s = getSummary(db);
 const wr = s.winRate;
-console.log(`🐄 COWBOT is ${s.live ? "LIVE 🟢" : "OFFLINE 🔴"} (last heartbeat ${s.heartbeat ?? "never"}) · copy mode ${s.copyMode.toUpperCase()}${s.paused ? " · PAUSED" : ""}`);
+console.log(`GodsEye is ${s.live ? "LIVE 🟢" : "OFFLINE 🔴"} (last heartbeat ${s.heartbeat ?? "never"}) · copy mode ${s.copyMode.toUpperCase()}${s.paused ? " · PAUSED" : ""}`);
 console.log(`   Wallet: ${s.wallet.pubkey ?? "not created yet (run npm run wallet)"}${s.wallet.balanceSol !== null ? ` · ${s.wallet.balanceSol.toFixed(4)} SOL` : ""}`);
 console.log(`   Copy results: ${s.closedPositions} closed · win rate ${wr === null ? "—" : wr.toFixed(1) + "%"} · realized ${s.realizedPnlSol.toFixed(4)} SOL · open ${s.openPositions}/${s.maxPositions} (${s.unrealizedPnlSol.toFixed(4)} SOL unrealized)`);
 console.log(`   Wallet database: ${s.walletsTracked} wallets · copying ${s.leaders} · fresh in last 24h ${s.freshWallets24h}`);

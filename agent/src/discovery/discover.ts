@@ -8,10 +8,10 @@
  * from there (age, funder, P&L, tier, AI or human).
  *
  * Wallets also arrive from the copy watcher: when a tracked wallet sends
- * SOL to a wallet COWBOT has never seen, that wallet is added too
+ * SOL to a wallet GodsEye has never seen, that wallet is added too
  * ("funded_by_tracked") — the classic move of a trader starting fresh.
  */
-import { type DB, nowIso, setMeta } from "@copycow/shared";
+import { type DB, nowIso, setMeta } from "@godseye/shared";
 import { config } from "../config";
 import { say } from "../log";
 import { fetchPoolTrades, fetchTopPools, fetchTrendingPools } from "../market/geckoterminal";

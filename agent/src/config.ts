@@ -1,8 +1,8 @@
 /**
- * All of COWBOT's settings, read from the .env file in the project root.
+ * All of GodsEye's settings, read from the .env file in the project root.
  * Every setting has a default, so the agent starts even with an empty .env.
  */
-import { envBool, envNum, envStr, loadEnv, HARD_MAX_COPY_TRADE_SOL } from "@copycow/shared";
+import { envBool, envNum, envStr, loadEnv, HARD_MAX_COPY_TRADE_SOL } from "@godseye/shared";
 
 loadEnv();
 
@@ -10,7 +10,7 @@ const list = (name: string) => envStr(name).split(",").map((s) => s.trim()).filt
 
 export const config = {
   // ---- Mode ----
-  /** "real" (default) = copy trades spend real SOL from COWBOT's wallet. "paper" = simulate fills with Jupiter quotes. */
+  /** "real" (default) = copy trades spend real SOL from GodsEye's wallet. "paper" = simulate fills with Jupiter quotes. */
   copyMode: (envStr("COPY_MODE", "real").toLowerCase() === "paper" ? "paper" : "real") as "real" | "paper",
 
   // ---- API keys ----
@@ -19,6 +19,23 @@ export const config = {
   solanaWsUrl: envStr("SOLANA_WS_URL"),
   birdeyeApiKey: envStr("BIRDEYE_API_KEY"),
   jupiterApiKey: envStr("JUPITER_API_KEY"),
+
+  // ---- Live gRPC stream (Shyft, Triton, Helius, QuickNode — Yellowstone protocol) ----
+  /** e.g. https://grpc.ny.shyft.to — empty = no stream, GodsEye samples pools and polls instead. */
+  grpcUrl: envStr("GRPC_URL"),
+  grpcToken: envStr("GRPC_TOKEN"),
+  /** Programs whose swaps are streamed (default: the memecoin venues + Jupiter). */
+  streamPrograms: list("STREAM_PROGRAMS"),
+  /** Promote a live wallet to full analysis once it has realized this much profit on the stream… */
+  streamPromotePnlSol: envNum("STREAM_PROMOTE_PNL_SOL", 1),
+  /** …over at least this many closed trades (with ≥ 50% wins). */
+  streamPromoteMinClosed: envNum("STREAM_PROMOTE_MIN_CLOSED", 3),
+  /** Most wallets kept in memory at once (idle ones are forgotten first). */
+  streamMaxWallets: envNum("STREAM_MAX_WALLETS", 300_000),
+  /** Forget a wallet's in-memory swaps after this long without trading. */
+  streamIdleHours: envNum("STREAM_IDLE_HOURS", 6),
+  /** Keep wallet_activity rows for wallets seen in the last this-many days. */
+  activityRetentionDays: envNum("ACTIVITY_RETENTION_DAYS", 30),
 
   // ---- Discovery: finding wallets worth watching ----
   discoverCron: envStr("DISCOVER_CRON", "*/30 * * * *"),
@@ -53,7 +70,7 @@ export const config = {
   copyLossDropSol: envNum("COPY_LOSS_DROP_SOL", 0.2),
 
   // ---- Copy trading (real money by default) ----
-  /** Total SOL COWBOT may have in copy positions at once, shared out by weight. */
+  /** Total SOL GodsEye may have in copy positions at once, shared out by weight. */
   copyBudgetSol: envNum("COPY_BUDGET_SOL", 1),
   copyMinTradeSol: envNum("COPY_MIN_TRADE_SOL", 0.01),
   copyMaxTradeSol: Math.min(HARD_MAX_COPY_TRADE_SOL, envNum("COPY_MAX_TRADE_SOL", 0.1)),
@@ -66,7 +83,7 @@ export const config = {
   stopLossPct: envNum("COPY_STOP_LOSS_PCT", 35),
   takeProfitPct: envNum("COPY_TAKE_PROFIT_PCT", 300),
   maxHoldHours: envNum("COPY_MAX_HOLD_HOURS", 48),
-  /** Ignore a leader's trade if COWBOT sees it later than this (price has moved on). */
+  /** Ignore a leader's trade if GodsEye sees it later than this (price has moved on). */
   maxCopyDelaySeconds: envNum("COPY_MAX_DELAY_SECONDS", 60),
   /** Don't copy buys that are smaller than this (SOL) — dust or tests. */
   minLeaderBuySol: envNum("MIN_LEADER_BUY_SOL", 0.2),

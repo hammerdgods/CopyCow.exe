@@ -10,7 +10,7 @@ import { findFunder, parseSwap, type ParsedSwap, type TxLike } from "./parse";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * Newest transaction format COWBOT reads. Solana now has version-1
+ * Newest transaction format GodsEye reads. Solana now has version-1
  * transactions, which the RPC refuses to return unless asked; web3.js 1.x
  * can't parse them, so transactions are fetched with raw JSON-RPC
  * ("jsonParsed" already has everything parse.ts needs).
@@ -100,13 +100,13 @@ export async function fetchParsedOne(signature: string): Promise<TxLike | null> 
 export interface WalletHistory {
   swaps: ParsedSwap[];
   newestSignature: string | null;
-  /** Oldest transaction time COWBOT saw. */
+  /** Oldest transaction time GodsEye saw. */
   oldestSeenAt: string | null;
-  /** True if COWBOT reached the wallet's very first transaction. */
+  /** True if GodsEye reached the wallet's very first transaction. */
   reachedOrigin: boolean;
   funder: string | null;
   activityAt: string | null;
-  /** How many signatures COWBOT read (swaps or not) between oldestSeenAt and now. */
+  /** How many signatures GodsEye read (swaps or not) between oldestSeenAt and now. */
   signaturesSeen: number;
 }
 

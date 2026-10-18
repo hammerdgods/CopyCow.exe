@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { PageHeader } from "@/components/page-header";
+import { COPYING_LINKS, SubNav } from "@/components/nav";
 import { Window } from "@/components/window";
 import { Badge } from "@/components/ui/badge";
 import { usePoll } from "@/lib/use-poll";
@@ -25,26 +26,20 @@ export default function ProofPage() {
 
   return (
     <>
-      <PageHeader title="Proof Ledger" kicker="the “we can't cheat” layer">
+      <PageHeader title="Copying" kicker="proof ledger · tamper-evident">
+        <SubNav links={COPYING_LINKS} />
         {data && (
           <Badge variant={data.chain.ok ? "win" : "loss"}>
             {data.chain.ok ? `chain intact · ${data.chain.checked} entries` : `chain BROKEN at #${data.chain.brokenAtId}`}
           </Badge>
         )}
       </PageHeader>
-      <Window title="README.TXT" icon="❔" className="mb-4">
-        <div className="space-y-2 p-4 text-xs text-muted-foreground">
-          <p>
-            Before COWBOT executes anything — a copy buy, a copy sell, a safety exit — it writes the decision down and stores its SHA-256
-            fingerprint. Each fingerprint also includes the previous one, so the entries form a chain.
-          </p>
-          <p>
-            Anyone can check: <code className="text-foreground">hash = sha256(prev_hash + &quot;|&quot; + payload)</code>. Editing any old trade would change its hash
-            and break every hash after it. Click <span className="text-foreground">verify</span> to recompute it in your own browser.
-          </p>
-        </div>
-      </Window>
-      <Window title="PROOF.LEDGER" icon="🔏">
+      <p className="mb-3 text-xs text-muted-foreground">
+        Every decision (copy buy, copy sell, safety exit) is written down with a SHA-256 fingerprint before it runs, each one including the previous:{" "}
+        <code className="text-foreground">hash = sha256(prev_hash + &quot;|&quot; + payload)</code>. Editing any old entry breaks every hash after it. Click verify
+        to recompute one in your browser.
+      </p>
+      <Window title="Ledger">
         <div className="divide-y">
           {(data?.entries ?? []).length === 0 && <p className="p-6 text-center text-sm text-muted-foreground">No entries yet.</p>}
           {(data?.entries ?? []).map((e) => (

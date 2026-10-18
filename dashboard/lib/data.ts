@@ -1,14 +1,14 @@
 import "server-only";
 import { NextResponse } from "next/server";
-import { filterWallets, isLive } from "@copycow/shared/dashboard-data";
-import type { ProofData, Summary, WalletQuery, WalletRow } from "@copycow/shared/dashboard-types";
-import { readSnapshot, snapshotStoreConfigured, walletKey, type FeedKey } from "@copycow/shared/snapshot-store";
-import { TIERS, WALLET_KINDS } from "@copycow/shared/constants";
+import { filterLiveWallets, filterWallets, isLive } from "@godseye/shared/dashboard-data";
+import type { LiveQuery, LiveWalletRow, ProofData, Summary, WalletQuery, WalletRow } from "@godseye/shared/dashboard-types";
+import { readSnapshot, snapshotStoreConfigured, walletKey, type FeedKey } from "@godseye/shared/snapshot-store";
+import { TIERS, WALLET_KINDS } from "@godseye/shared/constants";
 
 /**
  * Where the website gets its data:
- *  • TURSO_DATABASE_URL set (e.g. on Vercel) → the copy COWBOT last published
- *  • otherwise (running next to COWBOT)       → COWBOT's local database, live
+ *  • TURSO_DATABASE_URL set (e.g. on Vercel) → the copy GodsEye last published
+ *  • otherwise (running next to GodsEye)       → GodsEye's local database, live
  */
 export const hosted = snapshotStoreConfigured;
 
@@ -26,9 +26,9 @@ export function missingHostedSetup(): NextResponse | null {
   );
 }
 
-/** Empty-but-valid answers for feeds COWBOT hasn't published yet. */
+/** Empty-but-valid answers for feeds GodsEye hasn't published yet. */
 const EMPTY: Partial<Record<FeedKey, unknown>> = {
-  wallets: [], groups: [], logs: [], rugchecks: [],
+  wallets: [], groups: [], logs: [], rugchecks: [], live: [],
   copies: { open: [], closed: [], trades: [] },
   leaders: { leaders: [], changes: [], budgetSol: 0 },
 };
@@ -39,18 +39,18 @@ async function read<T>(key: FeedKey) {
     return undefined;
   });
 }
-const unreachable = () => NextResponse.json({ error: "Couldn't reach COWBOT's published data (Turso). Check TURSO_DATABASE_URL / TURSO_AUTH_TOKEN." }, { status: 502 });
+const unreachable = () => NextResponse.json({ error: "Couldn't reach GodsEye's published data (Turso). Check TURSO_DATABASE_URL / TURSO_AUTH_TOKEN." }, { status: 502 });
 
-/** Hosted mode: answer a feed from the copy COWBOT published. */
+/** Hosted mode: answer a feed from the copy GodsEye published. */
 export async function feed(key: FeedKey): Promise<NextResponse> {
   const snap = await read<unknown>(key);
   if (snap === undefined) return unreachable();
   if (snap === null) {
     if (key in EMPTY) return NextResponse.json(EMPTY[key]);
-    return NextResponse.json({ error: "COWBOT hasn't published any data yet. Start the agent with TURSO_DATABASE_URL set." }, { status: 503 });
+    return NextResponse.json({ error: "GodsEye hasn't published any data yet. Start the agent with TURSO_DATABASE_URL set." }, { status: 503 });
   }
   let body = snap.data;
-  // Recompute "live" so a stale copy can't claim COWBOT is running.
+  // Recompute "live" so a stale copy can't claim GodsEye is running.
   if (key === "summary") body = { ...(body as Summary), live: isLive((body as Summary).heartbeat, (body as Summary).agentStatus) };
   return NextResponse.json(body, { headers: { ...CACHE, "X-Data-Published-At": snap.updatedAt } });
 }
@@ -66,7 +66,7 @@ export async function walletsFeed(q: WalletQuery): Promise<NextResponse> {
 export async function walletFeed(address: string): Promise<NextResponse> {
   const snap = await readSnapshot<unknown>(walletKey(address)).catch(() => undefined);
   if (snap === undefined) return unreachable();
-  if (snap === null) return NextResponse.json({ error: "COWBOT hasn't analyzed this wallet yet." }, { status: 404 });
+  if (snap === null) return NextResponse.json({ error: "GodsEye hasn't analyzed this wallet yet." }, { status: 404 });
   return NextResponse.json(snap.data, { headers: CACHE });
 }
 
@@ -91,5 +91,22 @@ export function parseWalletQuery(sp: URLSearchParams): WalletQuery {
     sort: pick(sp.get("sort"), ["pnl_30d", "pnl_7d", "weight", "ai_score", "last_activity", "first_seen"] as const),
     limit: Number(sp.get("limit") ?? 100) || 100,
     offset: Number(sp.get("offset") ?? 0) || 0,
+  };
+}
+
+/** Hosted mode: the published live-stream wallet list, filtered and sorted. */
+export async function liveFeed(q: LiveQuery): Promise<NextResponse> {
+  const snap = await read<LiveWalletRow[]>("live");
+  if (snap === undefined) return unreachable();
+  return NextResponse.json(filterLiveWallets(snap?.data ?? [], q), { headers: CACHE });
+}
+
+export function parseLiveQuery(sp: URLSearchParams): LiveQuery {
+  const sort = sp.get("sort");
+  const kind = sp.get("kind");
+  return {
+    sort: sort === "swaps" || sort === "volume" || sort === "recent" ? sort : "pnl",
+    kind: kind === "ai" || kind === "human" || kind === "unknown" ? kind : "all",
+    limit: Number(sp.get("limit") ?? 200) || 200,
   };
 }

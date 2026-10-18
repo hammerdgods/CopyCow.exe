@@ -6,8 +6,8 @@ dotenv.config({ path: path.resolve(process.cwd(), "..", ".env") });
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: ["@copycow/shared"],
+  transpilePackages: ["@godseye/shared"],
   experimental: { serverComponentsExternalPackages: ["better-sqlite3", "@libsql/client", "libsql"] },
-  env: { COPYCOW_ROOT: path.resolve(process.cwd(), "..") },
+  env: { GODSEYE_ROOT: path.resolve(process.cwd(), "..") },
 };
 export default nextConfig;

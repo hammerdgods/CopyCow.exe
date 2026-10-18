@@ -1,8 +1,8 @@
 {
-  "name": "copycow-exe",
+  "name": "godseye",
   "version": "0.1.0",
   "private": true,
-  "description": "copycow.exe \u2014 COWBOT copy-trades the most profitable Solana wallets (AI agents and humans), learns who to follow, and publishes a public wallet database.",
+  "description": "GodsEye \u2014 sees every Solana wallet, sorts them (insider, lucky streak, needs attention, quitter; AI or human) and copy-trades the ones making money.",
   "workspaces": [
     "shared",
     "agent",
