@@ -33,16 +33,19 @@ export function cachedTokenInfo(db: DB, mint: string): TokenInfo | null {
 const earliest = (a: string | null, b: string | null) => (a && b ? (a < b ? a : b) : (a ?? b));
 
 /**
- * Record a launch time read from Solana (the mint's first transaction). Keeps the earliest known launch;
+ * Record a launch time read from Solana (the mint's first transaction), and its creator (who paid for that
+ * transaction) when known. Keeps the earliest known launch;
  * doesn't count as asking GeckoTerminal, which is still asked for the pool when price candles are needed.
  */
-export function recordLaunch(db: DB, mint: string, at: string): void {
+export function recordLaunch(db: DB, mint: string, at: string, creator: string | null = null): void {
   db.prepare(
-    `INSERT INTO token_info (mint, pool_created_at, checked_at) VALUES (?, ?, ?)
-     ON CONFLICT(mint) DO UPDATE SET pool_created_at = CASE
-       WHEN token_info.pool_created_at IS NULL OR excluded.pool_created_at < token_info.pool_created_at THEN excluded.pool_created_at
-       ELSE token_info.pool_created_at END`,
-  ).run(mint, at, nowIso());
+    `INSERT INTO token_info (mint, pool_created_at, creator, checked_at) VALUES (?, ?, ?, ?)
+     ON CONFLICT(mint) DO UPDATE SET
+       pool_created_at = CASE
+         WHEN token_info.pool_created_at IS NULL OR excluded.pool_created_at < token_info.pool_created_at THEN excluded.pool_created_at
+         ELSE token_info.pool_created_at END,
+       creator = CASE WHEN COALESCE(token_info.creator, '') = '' THEN excluded.creator ELSE token_info.creator END`,
+  ).run(mint, at, creator, nowIso());
 }
 
 /** Should GeckoTerminal be asked for this token's launch time (never asked, or unknown and asked a while ago)? */

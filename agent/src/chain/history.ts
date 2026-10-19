@@ -96,11 +96,22 @@ async function pageSignatures(
  * is the launch; otherwise `at` is the oldest transaction seen, so the buy came at least that long after
  * launch. Metered like other history reads.
  */
-export async function mintLaunchBefore(mint: string, before: string, beforeTs: string, pages = 3): Promise<{ at: string; exact: boolean }> {
+export async function mintLaunchBefore(
+  mint: string,
+  before: string,
+  beforeTs: string,
+  pages = 3,
+): Promise<{ at: string; exact: boolean; creator: string | null }> {
   const p = await pageSignatures(mint, { before, limit: pages * 1000, metered: true });
   const oldest = p.sigs.at(-1);
   const at = oldest?.blockTime ? new Date(oldest.blockTime * 1000).toISOString() : beforeTs; // nothing older: the buy launched it
-  return { at, exact: p.exhausted };
+  // The mint's first transaction created it: whoever paid for it is the creator (one more RPC call, no RugCheck).
+  let creator: string | null = null;
+  if (p.exhausted && oldest) {
+    const tx = await rpcBatch([oldest.signature], true).then((r) => r[0]).catch(() => null);
+    creator = tx?.transaction.message.accountKeys[0]?.pubkey.toString() ?? null;
+  }
+  return { at, exact: p.exhausted, creator };
 }
 
 /** Batches of 20 kept in flight at once: Shyft takes ~5 s per batch of parsed transactions, so one at a time is far below RPC_MAX_RPS (the budget still sets the pace). */

@@ -77,7 +77,7 @@ export const config = {
   analyzeCron: envStr("ANALYZE_CRON", "*/10 * * * *"),
   analyzePerRun: envNum("ANALYZE_PER_RUN", 60),
   /** Wallets analyzed at the same time (each mostly waits on the network). */
-  analyzeConcurrency: envNum("ANALYZE_CONCURRENCY", 4),
+  analyzeConcurrency: envNum("ANALYZE_CONCURRENCY", 8),
   /** First look at a wallet: read back this many days of its transactions… */
   historyDays: envNum("HISTORY_DAYS", 7),
   /** …but at most this many transactions on first look (busy bots trade thousands a day): breadth first. */

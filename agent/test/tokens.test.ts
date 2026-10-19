@@ -83,3 +83,15 @@ test("RugCheck is asked once per token, even when it doesn't know the creator", 
   assert.equal(calls.filter((u) => u.includes("rugcheck")).length, 1);
   globalThis.fetch = realFetch;
 });
+
+test("a creator read from the mint's first transaction fills a gap but never overwrites one", async () => {
+  const { recordLaunch, cachedTokenInfo } = await import("../src/market/tokens");
+  const db = openDb(":memory:");
+  recordLaunch(db, "M5", "2026-10-18T10:00:00.000Z", "CreatorA");
+  assert.equal(cachedTokenInfo(db, "M5")!.creator, "CreatorA");
+  recordLaunch(db, "M5", "2026-10-18T10:00:00.000Z", "CreatorB");
+  assert.equal(cachedTokenInfo(db, "M5")!.creator, "CreatorA");
+  db.prepare("UPDATE token_info SET creator = '' WHERE mint = 'M5'").run(); // RugCheck didn't know
+  recordLaunch(db, "M5", "2026-10-18T10:00:00.000Z", "CreatorC");
+  assert.equal(cachedTokenInfo(db, "M5")!.creator, "CreatorC");
+});
