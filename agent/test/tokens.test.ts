@@ -70,3 +70,16 @@ test("launch times keep the earliest known: Solana's first mint transaction beat
   assert.equal(t.pool_address, "POOL");
   globalThis.fetch = realFetch;
 });
+
+test("RugCheck is asked once per token, even when it doesn't know the creator", async () => {
+  (config as { shyftApiKey: string | undefined }).shyftApiKey = "test-key";
+  fakeNetwork(); // RugCheck answers {data: []}: no creator
+  const db = openDb(":memory:");
+  const first = await tokenInfo(db, "M4", { creator: true });
+  assert.equal(first.creator, "");
+  const asked = calls.filter((u) => u.includes("rugcheck")).length;
+  assert.equal(asked, 1);
+  await tokenInfo(db, "M4", { creator: true });
+  assert.equal(calls.filter((u) => u.includes("rugcheck")).length, 1);
+  globalThis.fetch = realFetch;
+});

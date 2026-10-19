@@ -79,9 +79,10 @@ export async function tokenInfo(db: DB, mint: string, opts: { creator?: boolean;
     }
   }
   if (info.decimals === null) info = { ...info, decimals: (await tokenDecimals(mint).catch(() => null)) ?? null };
-  if (opts.creator && !info.creator) {
-    const report = await fetchJson<{ creator?: string }>(`https://api.rugcheck.xyz/v1/tokens/${mint}/report`, { retries: 0, timeoutMs: 15_000 }).catch(() => null);
-    if (report?.creator) info = { ...info, creator: report.creator };
+  // Creator from RugCheck, asked once per token: "" means RugCheck answered but doesn't know (don't ask again).
+  if (opts.creator && info.creator === null) {
+    const report = await fetchJson<{ creator?: string }>(`https://api.rugcheck.xyz/v1/tokens/${mint}/report`, { retries: 0, timeoutMs: 8_000 }).catch(() => null);
+    if (report) info = { ...info, creator: report.creator || "" };
   }
   info = { ...info, checked_at: nowIso() };
   db.prepare(

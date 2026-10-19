@@ -7,7 +7,7 @@ import { rpcUrl } from "../config";
 import { connection } from "../rpc";
 import { findFunder, parseSwaps, type ParsedSwap, type TxLike } from "./parse";
 import { solUsdAt } from "../market/solprice";
-import { takeRpc } from "./rpc-budget";
+import { noteThrottled, takeRpc } from "./rpc-budget";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -29,6 +29,7 @@ async function rpcCall(signatures: string[], metered: boolean): Promise<RpcReply
   for (let attempt = 0; ; attempt++) {
     if (metered) await takeRpc(body.length);
     const res = await fetch(rpcUrl(), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body.length === 1 ? body[0] : body), signal: AbortSignal.timeout(30_000) });
+    if (res.status === 429) noteThrottled();
     if (res.status === 429 && attempt < 4) {
       await sleep(1500 * 2 ** attempt); // rate-limited: back off and try again
       continue;
@@ -50,6 +51,7 @@ async function rpcBatch(signatures: string[], metered = false): Promise<(TxLike 
     const failed: number[] = [];
     for (const r of replies) {
       if (r.error) {
+        if (/rate|limit|429|too many/i.test(r.error.message)) noteThrottled();
         failed.push(pending[r.id]);
         lastError = r.error.message;
       } else out[pending[r.id]] = r.result ?? null;
@@ -156,7 +158,7 @@ export interface WalletHistory {
   oldestSignature: string | null;
   /** Transactions read this time. */
   read: number;
-  /** True if nothing more needs reading back: the wallet's first transaction, the day target, or the cap was reached. */
+  /** True if nothing more needs reading back: the wallet's first transaction or the day target was reached. */
   historyDone: boolean;
 }
 
@@ -209,6 +211,7 @@ export async function readWalletHistory(
     historyFrom: t(sigs.at(-1)),
     oldestSignature: sigs.at(-1)?.signature ?? null,
     read: sigs.length,
-    historyDone: page.exhausted || page.reachedTime || sigs.length >= opts.limit,
+    // Complete only when the wallet's start or the day target was reached; stopping at the cap leaves room to deepen.
+    historyDone: page.exhausted || page.reachedTime,
   };
 }

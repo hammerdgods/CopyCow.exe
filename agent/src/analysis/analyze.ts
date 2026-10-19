@@ -13,7 +13,7 @@ import { type DB, isNonMemecoinSymbol, nowIso, SOL_MINT, type Tier } from "@gods
 import { config } from "../config";
 import { say, short } from "../log";
 import { mintLaunchBefore, readWalletHistory } from "../chain/history";
-import { rpcCallsSoFar } from "../chain/rpc-budget";
+import { rpcCallsSoFar, rpcUsage } from "../chain/rpc-budget";
 import type { ParsedSwap } from "../chain/parse";
 import { cachedTokenInfo, launchDue, recordLaunch, tokenInfo } from "../market/tokens";
 import { getPrices } from "../market/prices";
@@ -269,7 +269,7 @@ export async function deepenHistory(db: DB, address: string, now = Date.now()): 
     | undefined;
   if (!row) return 0;
   const before = row.history_oldest_sig ?? (db.prepare("SELECT signature FROM wallet_swaps WHERE wallet = ? ORDER BY ts LIMIT 1").get(address) as { signature: string } | undefined)?.signature;
-  const left = config.historyTxLimit - row.history_tx_read;
+  const left = config.historyDeepTxLimit - row.history_tx_read;
   if (!before || left <= 0) {
     db.prepare("UPDATE wallets SET history_done = 1 WHERE address = ?").run(address);
     return 0;
@@ -328,9 +328,13 @@ export async function runAnalysis(db: DB, limit = config.analyzePerRun): Promise
   let deepTx = 0;
   const deepen = db
     .prepare(
-      `SELECT address FROM wallets
-        WHERE last_analyzed_at IS NOT NULL AND history_done = 0 AND analyze_errors < 5
-        ORDER BY copy_weight > 0 DESC, tier IN ('proven','needs_attention','insider','lucky_streak') DESC, last_analyzed_at DESC
+      `SELECT w.address FROM wallets w
+         LEFT JOIN wallet_stats s ON s.wallet = w.address
+         LEFT JOIN smart_wallets sm ON sm.address = w.address AND sm.active = 1
+        WHERE w.last_analyzed_at IS NOT NULL AND w.history_done = 0 AND w.analyze_errors < 5
+          -- deep history only where it matters: wallets GodsEye copies or follows, or that are making money
+          AND (w.copy_weight > 0 OR sm.address IS NOT NULL OR w.tier IN ('proven', 'insider') OR (s.pnl_30d_usd > 0 AND s.closed_30d >= 3))
+        ORDER BY w.copy_weight > 0 DESC, sm.address IS NOT NULL DESC, w.tier = 'proven' DESC, s.pnl_30d_usd DESC
         LIMIT ?`,
     )
     .all(config.historyDeepenPerRun) as { address: string }[];
@@ -351,7 +355,7 @@ export async function runAnalysis(db: DB, limit = config.analyzePerRun): Promise
     const secs = Math.max(1, (Date.now() - startedAt) / 1000);
     say(
       "info",
-      `Analyzed ${done} wallet${done === 1 ? "" : "s"}${deepened ? `, read further back for ${deepened} (${deepTx.toLocaleString("en-US")} older transactions)` : ""} · ${calls.toLocaleString("en-US")} RPC requests in ${Math.round(secs)}s (${(calls / secs).toFixed(1)}/sec, cap ${config.rpcMaxRps}/sec). Time: transactions ${Math.round(runTime.history / 1000)}s, coin launch times ${Math.round(runTime.launches / 1000)}s, creators ${Math.round(runTime.creators / 1000)}s, crash checks ${Math.round(runTime.crashes / 1000)}s.`,
+      `Analyzed ${done} wallet${done === 1 ? "" : "s"}${deepened ? `, read further back for ${deepened} (${deepTx.toLocaleString("en-US")} older transactions)` : ""} · ${calls.toLocaleString("en-US")} RPC requests in ${Math.round(secs)}s (${(calls / secs).toFixed(1)}/sec, cap ${config.rpcMaxRps}/sec, ${(rpcUsage(Math.ceil(secs / 60)).throttled).toLocaleString("en-US")} rate-limited). Time: transactions ${Math.round(runTime.history / 1000)}s, coin launch times ${Math.round(runTime.launches / 1000)}s, creators ${Math.round(runTime.creators / 1000)}s, crash checks ${Math.round(runTime.crashes / 1000)}s.`,
     );
   }
   return done;
