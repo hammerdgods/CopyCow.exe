@@ -30,6 +30,21 @@ export function cachedTokenInfo(db: DB, mint: string): TokenInfo | null {
   return (db.prepare("SELECT * FROM token_info WHERE mint = ?").get(mint) as TokenInfo | undefined) ?? null;
 }
 
+const earliest = (a: string | null, b: string | null) => (a && b ? (a < b ? a : b) : (a ?? b));
+
+/**
+ * Record a launch time read from Solana (the mint's first transaction). Keeps the earliest known launch;
+ * doesn't count as asking GeckoTerminal, which is still asked for the pool when price candles are needed.
+ */
+export function recordLaunch(db: DB, mint: string, at: string): void {
+  db.prepare(
+    `INSERT INTO token_info (mint, pool_created_at, checked_at) VALUES (?, ?, ?)
+     ON CONFLICT(mint) DO UPDATE SET pool_created_at = CASE
+       WHEN token_info.pool_created_at IS NULL OR excluded.pool_created_at < token_info.pool_created_at THEN excluded.pool_created_at
+       ELSE token_info.pool_created_at END`,
+  ).run(mint, at, nowIso());
+}
+
 /** Should GeckoTerminal be asked for this token's launch time (never asked, or unknown and asked a while ago)? */
 export function launchDue(info: TokenInfo | null, now = Date.now()): boolean {
   if (!info?.launch_checked_at) return true;
@@ -56,7 +71,8 @@ export async function tokenInfo(db: DB, mint: string, opts: { creator?: boolean;
       info = {
         ...info,
         symbol: info.symbol ?? launch.symbol,
-        pool_created_at: launch.poolCreatedAt ?? info.pool_created_at,
+        // Keep the earlier launch: Solana's first mint transaction can predate GeckoTerminal's pool.
+        pool_created_at: earliest(info.pool_created_at, launch.poolCreatedAt),
         pool_address: launch.topPool ?? info.pool_address,
         launch_checked_at: nowIso(),
       };

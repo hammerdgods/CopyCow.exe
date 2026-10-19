@@ -88,6 +88,19 @@ async function pageSignatures(
   return { sigs: out, exhausted: false, reachedTime: false };
 }
 
+/**
+ * When was this token launched, as far as Solana can tell cheaply? Walks the mint's signatures back from
+ * `before` (a buy of it), up to `pages` × 1000. `exact`: the mint's first transaction was reached, so `at`
+ * is the launch; otherwise `at` is the oldest transaction seen, so the buy came at least that long after
+ * launch. Metered like other history reads.
+ */
+export async function mintLaunchBefore(mint: string, before: string, beforeTs: string, pages = 3): Promise<{ at: string; exact: boolean }> {
+  const p = await pageSignatures(mint, { before, limit: pages * 1000, metered: true });
+  const oldest = p.sigs.at(-1);
+  const at = oldest?.blockTime ? new Date(oldest.blockTime * 1000).toISOString() : beforeTs; // nothing older: the buy launched it
+  return { at, exact: p.exhausted };
+}
+
 /** Batches of 20 kept in flight at once: Shyft takes ~5 s per batch of parsed transactions, so one at a time is far below RPC_MAX_RPS (the budget still sets the pace). */
 const BATCHES_IN_FLIGHT = 12;
 

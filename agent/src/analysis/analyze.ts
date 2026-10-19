@@ -12,10 +12,10 @@
 import { type DB, isNonMemecoinSymbol, nowIso, SOL_MINT, type Tier } from "@godseye/shared";
 import { config } from "../config";
 import { say, short } from "../log";
-import { readWalletHistory } from "../chain/history";
+import { mintLaunchBefore, readWalletHistory } from "../chain/history";
 import { rpcCallsSoFar } from "../chain/rpc-budget";
 import type { ParsedSwap } from "../chain/parse";
-import { cachedTokenInfo, launchDue, tokenInfo } from "../market/tokens";
+import { cachedTokenInfo, launchDue, recordLaunch, tokenInfo } from "../market/tokens";
 import { getPrices } from "../market/prices";
 import { classify } from "./classifier";
 import { computeStats, realize, type SwapLite } from "./pnl";
@@ -69,23 +69,51 @@ export function insertSwaps(db: DB, swaps: ParsedSwap[]): number {
   return n;
 }
 
-/** Fill in "seconds after launch" for buys whose token launch time is now known. */
+/** Coins per wallet whose launch time is looked up in one analysis (each costs 1–3 RPC calls). */
+const LAUNCH_MINTS_PER_WALLET = 25;
+
+/**
+ * Fill in "seconds after launch" for this wallet's buys. Launch times come from Solana first (the mint's
+ * first transaction: cheap, and the true launch), and from GeckoTerminal only when Solana can't settle it.
+ */
 async function fillTokenAges(db: DB, wallet: string, budget: { left: number }): Promise<void> {
   const missing = db
-    .prepare("SELECT DISTINCT mint FROM wallet_swaps WHERE wallet = ? AND side = 'buy' AND token_age_sec IS NULL ORDER BY ts DESC LIMIT 25")
-    .all(wallet) as { mint: string }[];
-  for (const { mint } of missing) {
+    .prepare(
+      `SELECT mint, MIN(ts) first_ts,
+              (SELECT signature FROM wallet_swaps f WHERE f.wallet = w.wallet AND f.mint = w.mint AND f.side = 'buy' ORDER BY f.ts LIMIT 1) first_sig
+         FROM wallet_swaps w WHERE wallet = ? AND side = 'buy' AND token_age_sec IS NULL
+        GROUP BY mint ORDER BY MAX(ts) DESC LIMIT ?`,
+    )
+    .all(wallet, LAUNCH_MINTS_PER_WALLET) as { mint: string; first_ts: string; first_sig: string }[];
+  const setAges = (mint: string, launchAt: string) =>
+    db.prepare(
+      `UPDATE wallet_swaps SET token_age_sec = MAX(0, (julianday(ts) - julianday(?)) * 86400.0)
+        WHERE wallet = ? AND mint = ? AND token_age_sec IS NULL AND ts >= ?`,
+    ).run(launchAt, wallet, mint, launchAt);
+  for (const { mint, first_ts, first_sig } of missing) {
     let info = cachedTokenInfo(db, mint);
-    // A name may already be cached (from Shyft) without the launch time: that's what's needed here.
-    if (!info?.pool_created_at && launchDue(info) && budget.left > 0) {
+    if (info?.pool_created_at) {
+      setAges(mint, info.pool_created_at);
+      continue;
+    }
+    // 1) Solana: walk the mint's history back from this wallet's first buy.
+    const chain = await mintLaunchBefore(mint, first_sig, first_ts).catch(() => null);
+    if (chain?.exact) {
+      recordLaunch(db, mint, chain.at);
+      setAges(mint, chain.at);
+      continue;
+    }
+    // Not the very first transaction, but already old enough at the first buy: ages are lower bounds,
+    // which is all "early buy" needs (they can't be early).
+    if (chain && (Date.parse(first_ts) - Date.parse(chain.at)) / 1000 > config.earlyBuySeconds) {
+      setAges(mint, chain.at);
+      continue;
+    }
+    // 2) GeckoTerminal (rate-limited): very busy launches, or when Solana couldn't answer.
+    if (launchDue(info) && budget.left > 0) {
       budget.left--;
       info = await tokenInfo(db, mint, { launch: true }).catch(() => null);
-    }
-    if (info?.pool_created_at) {
-      db.prepare(
-        `UPDATE wallet_swaps SET token_age_sec = MAX(0, (julianday(ts) - julianday(?)) * 86400.0)
-          WHERE wallet = ? AND mint = ? AND token_age_sec IS NULL AND ts >= ?`,
-      ).run(info.pool_created_at, wallet, mint, info.pool_created_at);
+      if (info?.pool_created_at) setAges(mint, info.pool_created_at);
     }
   }
 }
@@ -269,22 +297,32 @@ export async function runAnalysis(db: DB, limit = config.analyzePerRun): Promise
     .prepare(
       `SELECT address FROM wallets
         WHERE analyze_errors < 5 AND (last_analyzed_at IS NULL OR last_analyzed_at < ?)
-        ORDER BY last_analyzed_at IS NOT NULL, copy_weight > 0 DESC, last_analyzed_at
+        ORDER BY last_analyzed_at IS NOT NULL, copy_weight > 0 DESC,
+                 -- never studied: wallets the live stream saw making money first, then the newest found
+                 (last_analyzed_at IS NULL AND discovered_via = 'live_stream') DESC,
+                 CASE WHEN last_analyzed_at IS NULL THEN first_seen_at END DESC,
+                 last_analyzed_at
         LIMIT ?`,
     )
     .all(staleBefore, limit) as { address: string }[];
   const budget = { left: TOKEN_LOOKUPS_PER_RUN };
   const crashBudget = { left: CRASH_CHECKS_PER_RUN };
   let done = 0;
-  for (const { address } of rows) {
-    try {
-      await analyzeWallet(db, address, budget, crashBudget);
-      done++;
-    } catch (e) {
-      db.prepare("UPDATE wallets SET analyze_errors = analyze_errors + 1 WHERE address = ?").run(address);
-      say("warn", `Couldn't analyze ${short(address)}: ${(e as Error).message.slice(0, 140)}`);
+  // Several wallets at once: each is mostly waiting on the network; the RPC budget sets the overall pace.
+  let next = 0;
+  const worker = async () => {
+    while (next < rows.length) {
+      const { address } = rows[next++];
+      try {
+        await analyzeWallet(db, address, budget, crashBudget);
+        done++;
+      } catch (e) {
+        db.prepare("UPDATE wallets SET analyze_errors = analyze_errors + 1 WHERE address = ?").run(address);
+        say("warn", `Couldn't analyze ${short(address)}: ${(e as Error).message.slice(0, 140)}`);
+      }
     }
-  }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(config.analyzeConcurrency, rows.length)) }, worker));
   // Wallets studied before history was read by days: read further back, copied wallets first.
   let deepened = 0;
   let deepTx = 0;
