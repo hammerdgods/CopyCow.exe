@@ -289,7 +289,10 @@ export async function runAnalysis(db: DB, limit = config.analyzePerRun): Promise
       await analyzeWallet(db, address, budget, crashBudget); // re-score with the longer history
       deepened++;
     } catch (e) {
-      say("warn", `Couldn't read further back for ${short(address)}: ${(e as Error).message.slice(0, 140)}`);
+      // e.g. the RPC can't find the stored cursor transaction: keep the history it has and stop retrying,
+      // or this wallet would take a deepening slot every run.
+      db.prepare("UPDATE wallets SET history_done = 1 WHERE address = ?").run(address);
+      say("warn", `Couldn't read further back for ${short(address)}, keeping the history it has: ${(e as Error).message.slice(0, 200)}`);
     }
   }
   if (done || deepened) {
