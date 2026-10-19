@@ -88,8 +88,8 @@ async function pageSignatures(
   return { sigs: out, exhausted: false, reachedTime: false };
 }
 
-/** Batches of 20 kept in flight at once: one at a time is latency-bound far below RPC_MAX_RPS. */
-const BATCHES_IN_FLIGHT = 4;
+/** Batches of 20 kept in flight at once: Shyft takes ~5 s per batch of parsed transactions, so one at a time is far below RPC_MAX_RPS (the budget still sets the pace). */
+const BATCHES_IN_FLIGHT = 12;
 
 /** Fetch parsed transactions in small batches (falls back to one at a time if the RPC refuses batches). Metered. */
 export async function fetchParsed(signatures: string[]): Promise<(TxLike | null)[]> {
