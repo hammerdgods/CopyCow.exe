@@ -8,6 +8,8 @@ import { config } from "../config";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 let nextFree = 0;
+/** Every metered request since start (never trimmed, so runs longer than an hour measure correctly). */
+let total = 0;
 /** Requests per minute, keyed by minute (epoch ms / 60 000), kept for an hour. */
 const perMinute = new Map<number, number>();
 /** Requests the RPC refused as rate-limited (each was retried after a pause), per minute. */
@@ -27,6 +29,7 @@ export async function takeRpc(n: number): Promise<void> {
   const start = Math.max(now, nextFree);
   nextFree = start + (n * 1000) / rate;
   if (start > now) await sleep(start - now);
+  total += n;
   const m = Math.floor(Date.now() / 60_000);
   perMinute.set(m, (perMinute.get(m) ?? 0) + n);
   for (const k of perMinute.keys()) if (k < m - 60) perMinute.delete(k);
@@ -49,7 +52,5 @@ export function rpcUsage(minutes = 60): { calls: number; avgPerSec: number; peak
 
 /** Total metered requests so far (for measuring one run). */
 export function rpcCallsSoFar(): number {
-  let n = 0;
-  for (const v of perMinute.values()) n += v;
-  return n;
+  return total;
 }

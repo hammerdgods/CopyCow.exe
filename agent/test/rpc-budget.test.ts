@@ -20,3 +20,10 @@ test("rate-limited RPC answers are counted for the hourly report", async () => {
   noteThrottled();
   assert.equal(rpcUsage(60).throttled - before, 2);
 });
+
+test("the running total never shrinks, so long runs measure correctly", async () => {
+  const { rpcCallsSoFar } = await import("../src/chain/rpc-budget");
+  const a = rpcCallsSoFar();
+  await takeRpc(3);
+  assert.equal(rpcCallsSoFar() - a, 3);
+});
