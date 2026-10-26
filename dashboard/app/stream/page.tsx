@@ -53,12 +53,12 @@ export default function StreamPage() {
           value={
             <span className="flex items-center gap-3">
               <span className={cn("h-4 w-4 shrink-0 rounded-full border-[3px] border-ink", connected ? "animate-pulsedot bg-lime" : "bg-coral")} aria-hidden />
-              {!st?.enabled ? "Off" : !s?.live ? "Agent offline" : st.status === "connected" && !connected ? "Connected, no trades" : streamStatusLabel(st.status)}
+              {!st?.enabled ? "Off" : !s?.live ? "Agent offline" : st.status === "connected" && !connected ? "Quiet" : st.status === "waiting_for_ip" ? "Waiting for IP" : streamStatusLabel(st.status)}
             </span>
           }
           sub={
             st?.status === "waiting_for_ip"
-              ? `this connection's IP keeps changing · ${st.ipTries} tries from ${st.ipDistinct} IPs so far`
+              ? `Shyft only accepts allowlisted IPs and this connection's keeps changing · ${st.ipTries} tries from ${st.ipDistinct} IPs so far`
               : st?.lastAt
                 ? `last trade ${ago(st.lastAt)}`
                 : undefined
