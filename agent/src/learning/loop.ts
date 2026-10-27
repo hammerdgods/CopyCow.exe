@@ -9,6 +9,7 @@ import { say, short } from "../log";
 import { computeWeights, type WeightInput } from "./weights";
 import { solUsdAt } from "../market/solprice";
 import { adaptThresholds } from "./adaptive";
+import { recordEvaluations } from "../audit/evaluations";
 
 export function runLearning(db: DB): string[] {
   const solNow = solUsdAt(Date.now()) ?? 0;
@@ -34,7 +35,8 @@ export function runLearning(db: DB): string[] {
     isFresh: r.is_fresh === 1, copyPnl14: r.copy_pnl, copyClosed14: r.copy_closed, oldWeight: r.copy_weight,
     leadN: r.lead_n ?? 0, leadMedian6h: r.lead_median_6h,
   }));
-  const result = computeWeights(inputs, { maxLeaders: config.maxLeaders, copyLossDropSol: config.copyLossDropSol, minClosed: config.minClosedForProven, minWinRate });
+  const cutoffs = { maxLeaders: config.maxLeaders, copyLossDropSol: config.copyLossDropSol, minClosed: config.minClosedForProven, minWinRate };
+  const result = computeWeights(inputs, cutoffs);
 
   const update = db.prepare("UPDATE wallets SET copy_weight = ?, weight_reason = ? WHERE address = ?");
   const history = db.prepare("INSERT INTO weight_history (wallet, ts, old_weight, new_weight, reason) VALUES (?, ?, ?, ?, ?)");
@@ -58,6 +60,8 @@ export function runLearning(db: DB): string[] {
       }
     }
   })();
+  // Why each wallet is where it is, for every one that changed (audit/evaluations.ts). Observation only.
+  recordEvaluations(db, { inputs, results: result, cfg: cutoffs, mode: config.copyMode });
   setMeta(db, "last_learning_at", ts);
   setMeta(db, "copy_budget_sol", config.copyBudgetSol);
   const leaders = [...result.entries()].filter(([, v]) => v.weight > 0).map(([a]) => a);
