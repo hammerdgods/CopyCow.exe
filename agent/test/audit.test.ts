@@ -8,6 +8,7 @@ import fc from "fast-check";
 import { openDb, type DB } from "@godseye/shared";
 import type { ParsedSwap } from "../src/chain/parse";
 import type { WeightInput } from "../src/learning/weights";
+import { passCopyGate } from "./helpers";
 
 process.env.COPY_BUDGET_SOL = "1";
 process.env.COPY_MAX_TRADE_SOL = "0.1";
@@ -122,6 +123,7 @@ test("the learning loop leaves an evaluation for each wallet, and nothing more w
   seedWallet(db, "GOOD");
   seedWallet(db, "GONE", { tier: "quitter" });
   seedWallet(db, "NEW", { tier: "unrated", closed: 3, win: 0.7 });
+  passCopyGate(db);
   runLearning(db);
   const rows = evals(db);
   assert.equal(rows.length, 3);
@@ -141,6 +143,8 @@ test("the learning loop leaves an evaluation for each wallet, and nothing more w
   assert.equal(JSON.parse(by.GOOD.data_quality).historyComplete, true);
   assert.equal(by.GOOD.mode, "paper");
   assert.equal(by.GOOD.changed, 1);
+
+  passCopyGate(db);
 
   runLearning(db);
   assert.equal(evals(db).length, 3, "same facts, no new rows");
@@ -360,6 +364,7 @@ const checksOf = (d: Record<string, any>) => JSON.parse(d.checks) as { check: st
 test("a bought copy records every check that ran, in order, with the fill and the leader's evaluation", async () => {
   const { db, eng } = engine();
   seedWallet(db, "LEADER", { weight: 0.5 });
+  passCopyGate(db);
   runLearning(db); // gives the leader an evaluation row
   const s = swap();
   token(db, s.mint);
@@ -526,6 +531,7 @@ test("the report counts outcomes and failed checks, and the explanations read li
   const gate = new CopyabilityGate(fakeDeps({ failSell: true }).deps, settings({ gateConcurrency: 4, gateMaxQueue: 10 }));
   const { db, eng } = engine({ gate });
   seedWallet(db, "LEADER", { weight: 0.5 });
+  passCopyGate(db);
   runLearning(db);
   const ok = swap();
   const late = swap({ ts: iso(Date.now() - 120_000) });

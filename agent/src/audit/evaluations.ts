@@ -21,7 +21,7 @@ import { auditSettings } from "./settings";
 import { ensureAuditTables } from "./schema";
 
 export type WalletState = "copy" | "watch" | "ignore" | "block";
-export type Gate = "ok" | "not_in_top" | "quitter" | "lucky_streak" | "few_closed" | "win_rate" | "pnl7" | "copy_loss" | "blocked";
+export type Gate = "ok" | "not_in_top" | "quitter" | "lucky_streak" | "few_closed" | "win_rate" | "pnl7" | "copy_loss" | "bot" | "copy_replay" | "blocked";
 
 export interface WeightCutoffs {
   maxLeaders: number;
@@ -42,6 +42,8 @@ export function gateOf(w: WeightInput, cfg: WeightCutoffs): Gate {
   if ((w.winRate30 ?? 0) < cfg.minWinRate) return "win_rate";
   if (w.pnl7 <= 0) return "pnl7";
   if (w.copyClosed14 >= 3 && w.copyPnl14 <= -cfg.copyLossDropSol) return "copy_loss";
+  if (w.botGate) return "bot";
+  if (w.copyGate) return "copy_replay";
   return "ok";
 }
 
@@ -148,6 +150,8 @@ export function explain(w: WeightInput, result: WeightResult, cfg: WeightCutoffs
     win_rate: `a win rate of ${pct(cfg.minWinRate)} or more (the bar moves with outcomes)`,
     pnl7: "a profitable week",
     copy_loss: "the losing copies leaving the 14-day window",
+    bot: "trading at a pace a delayed copy can follow (median hold 15 s+, 20 transactions an hour or fewer, no same-block round trips)",
+    copy_replay: "a copy replay at GodsEye's delay with a positive median return over 10+ copies (redone every 6 hours)",
     not_in_top: `a place among the top ${cfg.maxLeaders} earners`,
     ok: "any gate failing, or losing a top-earner place",
   };
