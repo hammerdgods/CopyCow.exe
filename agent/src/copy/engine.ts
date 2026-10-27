@@ -55,6 +55,7 @@ export class CopyEngine {
     private db: DB,
     private executor: Executor,
     private wallet: PublicKey | null,
+    private priceFn: typeof getPrices = getPrices,
   ) {}
 
   /** One action per token at a time, so a buy and a sell can't race. */
@@ -201,7 +202,7 @@ export class CopyEngine {
       }
     }
     if (!open.length) return;
-    const prices = await getPrices([SOL_MINT, ...open.map((p) => p.mint)]).catch(() => new Map());
+    const prices = await this.priceFn([SOL_MINT, ...open.map((p) => p.mint)]).catch(() => new Map());
     const solUsd = prices.get(SOL_MINT)?.priceUsd;
     if (!solUsd) return;
     for (const pos of open) {
