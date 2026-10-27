@@ -85,6 +85,7 @@ npm run setup          # creates .env — open it and add HELIUS_API_KEY at leas
 |---|---|
 | `npm run agent` | Run GodsEye: discovery, analysis, learning and live copy trading. Leave it running. |
 | `npm run dashboard` | The website at http://localhost:3000 (run in a second terminal). |
+| `npm run preflight` | Read-only go/no-go before trading: settings vs wallet balance, RPC, Jupiter, RugCheck, and a dry-run swap through the pre-signing checks (nothing is signed or sent). |
 | `npm run wallet` | GodsEye's wallet address (send SOL here to fund real copy trading) + balance. |
 | `npm run status` | Is GodsEye alive? Results, tier counts, who it's copying. |
 | `npm run pause` / `npm run resume` | Stop / restart new copy buys. Sells and safety exits keep working. |
@@ -95,6 +96,8 @@ npm run setup          # creates .env — open it and add HELIUS_API_KEY at leas
 | `npm test` | Run the tests. |
 
 ### Going live, in order
+
+First funding the wallet? Follow the staged **[testing plan](docs/TESTING_PLAN.md)** (preflight → paper → micro-live → scale) instead of jumping straight to `COPY_MODE=real`.
 
 1. Add your RPC to `.env`: `SOLANA_RPC_URL` (e.g. Shyft `https://rpc.shyft.to?api_key=…`) or `HELIUS_API_KEY`. The public RPC is too slow for analysis (about 3 minutes per wallet). With a gRPC plan, also set `GRPC_URL` and `GRPC_TOKEN` to watch every swap live.
 2. Optional but recommended: start with `COPY_MODE=paper` for a few days to see who GodsEye would copy, on the **Who GodsEye Copies** and **Live Copies** pages.

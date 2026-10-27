@@ -16,6 +16,7 @@
     "learn": "npm run learn -w agent",
     "wallet": "npm run wallet -w agent",
     "status": "npm run status -w agent",
+    "preflight": "npm run preflight -w agent",
     "pause": "npm run pause -w agent",
     "resume": "npm run resume -w agent",
     "publish-dashboard": "npm run publish-dashboard -w agent",
